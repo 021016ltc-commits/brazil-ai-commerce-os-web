@@ -17,6 +17,7 @@ import {
   HeartPulse,
   LineChart,
   ListTodo,
+  LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
@@ -44,6 +45,7 @@ const navGroups = [
   {
     label: "运营",
     items: [
+      { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
       { href: "/command-center", key: "commandCenter", icon: Command },
       { href: "/daily-ops", key: "dailyOps", icon: CalendarCheck },
       { href: "/tasks", key: "tasks", icon: ListTodo },
@@ -77,16 +79,20 @@ const settingsGroups = [
     items: [
       { href: "/users", key: "users", icon: Users },
       { href: "/tenants", key: "tenants", icon: Building2 },
-      { href: "/system-health", key: "systemHealth", icon: HeartPulse },
       { href: "/system", key: "system", icon: Activity },
     ],
   },
   {
-    label: "系统验证",
-    items: [{ href: "/verification", key: "verification", icon: ClipboardCheck }],
+    label: "系统诊断",
+    adminOnly: true,
+    items: [
+      { href: "/system-health", key: "systemHealth", icon: HeartPulse },
+      { href: "/verification", key: "verification", icon: ClipboardCheck },
+    ],
   },
   {
     label: "更多工具",
+    adminOnly: true,
     items: [{ href: "/users#operation-logs", label: "操作日志", icon: ClipboardList }],
   },
 ] as const;
@@ -144,6 +150,20 @@ function SettingsMenu({
   const { dictionary } = useLanguage();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isAdmin = currentUser?.roles.includes("admin") ?? false;
+  const visibleSettingsGroups = settingsGroups
+    .map((group) => {
+      if ("adminOnly" in group && group.adminOnly && !isAdmin) return null;
+
+      const items = group.items.filter((item) => {
+        if (!currentUser) return false;
+        if (isAdmin) return true;
+        return userCanAccessPath(currentUser, routePath(item.href));
+      });
+
+      return items.length > 0 ? { ...group, items } : null;
+    })
+    .filter((group): group is NonNullable<typeof group> => Boolean(group));
 
   useEffect(() => {
     if (!open) return;
@@ -187,7 +207,7 @@ function SettingsMenu({
           role="menu"
           className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-lg border border-line bg-white py-2 shadow-lg"
         >
-          {settingsGroups.map((group) => (
+          {visibleSettingsGroups.map((group) => (
             <div key={group.label} className="border-b border-line py-2 last:border-b-0">
               <div className="px-4 pb-1 text-xs font-semibold text-indigo-700">{group.label}</div>
               <div className="space-y-1 px-2">

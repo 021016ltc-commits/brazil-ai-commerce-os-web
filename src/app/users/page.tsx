@@ -307,7 +307,7 @@ export default function UsersPage() {
         <KpiCard label="启用用户" value={`${activeUsers}`} detail="当前启用状态用户。" icon={<UserCog className="h-5 w-5" aria-hidden="true" />} />
         <KpiCard label="角色数量" value={`${data.roles.length}`} detail="管理员、运营、采购、财务、只读。" icon={<KeyRound className="h-5 w-5" aria-hidden="true" />} />
         <KpiCard label="权限数量" value={`${data.permissions.length}`} detail="页面查看、用户管理、审批权限。" icon={<ListChecks className="h-5 w-5" aria-hidden="true" />} />
-        <KpiCard label="operation_logs" value={`${logs.operation_logs.length}`} detail="登录、退出、审批、用户创建和修改。" icon={<Activity className="h-5 w-5" aria-hidden="true" />} />
+        <KpiCard label="操作日志" value={`${logs.operation_logs.length}`} detail="登录、退出、审批、用户创建和修改。" icon={<Activity className="h-5 w-5" aria-hidden="true" />} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
