@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "functions": {
+    "src/app/api/**/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "SYSTEM_MODE": "production",
+    "DATA_SOURCE_MODE": "postgres",
+    "CACHE_MODE": "memory_or_upstash",
+    "CACHE_ENABLED": "true",
+    "SCHEDULER_ENABLED": "true",
+    "SHOPEE_MODE": "readonly",
+    "SHOOPE_API_MODE": "readonly",
+    "LOG_LEVEL": "error",
+    "NEXT_PUBLIC_APP_NAME": "Brazil AI Commerce OS Lite"
+  }
+}

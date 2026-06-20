@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-default: 8px;
+  --border-default: 1px solid #d1d5db;
+  --color-page: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-text: #172033;
+  --color-muted: #64748b;
+  --color-primary: #0f766e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: Inter, "Noto Sans SC", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  border-radius: var(--radius-default);
+}
+
+[data-nextjs-dev-tools-button],
+[data-nextjs-dev-tools-panel],
+[data-nextjs-dev-tools-menu],
+[aria-label="Next.js Dev Tools"],
+[aria-label="Open Next.js Dev Tools"],
+[aria-label="Preferences"],
+[title="Next.js Dev Tools"],
+[title="Preferences"] {
+  display: none !important;
+}
