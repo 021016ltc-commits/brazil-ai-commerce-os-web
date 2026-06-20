@@ -11,8 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { ProfitExperienceCharts } from "@/components/ProfitExperienceCharts";
-import { productProfitMock, profitSnapshotMock } from "@/data/profitMock";
-import { buildCostStructure, buildProfitRisk } from "@/lib/profit";
+import { emptyProfitResponse } from "@/data/emptyResponses";
 import { formatBrl, formatPercent } from "@/lib/format";
 import type { Platform, ProductProfitItem, ProfitApiResponse } from "@/types";
 
@@ -20,16 +19,10 @@ type PlatformFilter = "all" | Platform;
 type ProfitRiskFilter = "all" | "loss" | "low_profit" | "high_risk";
 type SortKey = "net_profit" | "net_margin" | "revenue";
 
-const fallbackProfit: ProfitApiResponse = {
-  source: "mock",
-  snapshot: profitSnapshotMock,
-  cost_structure: buildCostStructure(profitSnapshotMock),
-  profit_risk: buildProfitRisk(productProfitMock),
-  product_profit: productProfitMock,
-};
+const fallbackProfit: ProfitApiResponse = emptyProfitResponse;
 
 function sourceLabel(source: ProfitApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function sortLabel(sortBy: SortKey) {
@@ -138,7 +131,7 @@ export default function ProfitPage() {
               <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">利润中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                 这个页面把利润结果、成本结构、利润风险和商品利润排行放到一个面板里，帮助你快速判断今天是先守利润、
-                先控成本，还是先盯亏损与低利润商品。它优先读取本地数据，不可用时自动回退到备用数据。
+                先控成本，还是先盯亏损与低利润商品。它只展示真实业务数据，真实数据源不可用时显示空状态与连接提示。
               </p>
             </div>
           </div>

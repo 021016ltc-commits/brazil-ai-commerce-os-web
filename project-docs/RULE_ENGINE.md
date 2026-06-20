@@ -4,7 +4,7 @@ Last updated: 2026-06-17
 
 ## 1. Current Rule Engine Scope
 
-The current system uses local deterministic rules and mock or SQLite data.
+The current system uses local deterministic rules and real SQLite/PostgreSQL data.
 
 It does not call:
 
@@ -23,7 +23,7 @@ Rules live mainly in:
 - `src/lib/dashboard.ts`
 - `src/lib/tasks.ts`
 
-Inventory rules are partly data-driven from SQLite or mock seed records.
+Inventory rules are data-driven from real inventory records.
 
 ## 2. Opportunity Rules
 
@@ -155,7 +155,7 @@ Dashboard profit risk items:
 
 ## 6. Inventory Rules
 
-Current inventory center reads inventory fields from SQLite or mock fallback.
+Current inventory center reads inventory fields from SQLite/PostgreSQL-backed data sources.
 
 Important fields:
 

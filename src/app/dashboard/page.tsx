@@ -21,26 +21,10 @@ import {
 import { MetricCard } from "@/components/MetricCard";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { dashboardSummaryMock } from "@/data/dashboardMock";
-import { tasksMock } from "@/data/tasksMock";
-import {
-  action_queue as mockActionQueue,
-  crawl_logs as mockCrawlLogs,
-  data_quality_report as mockDataQualityReport,
-} from "@/data/mock";
-import { opportunityProductsMock } from "@/data/opportunitiesMock";
+import { emptyDashboardResponse, emptyTasksResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { priorityLabel, riskLevelLabel, riskTypeLabel, sourceModuleLabel } from "@/locales/zh-CN";
 import type { DashboardSummaryApiResponse, RiskLevel, TasksApiResponse } from "@/types";
-
-const fallbackDashboard: DashboardSummaryApiResponse = {
-  source: "mock",
-  products: opportunityProductsMock,
-  action_queue: mockActionQueue,
-  crawl_logs: mockCrawlLogs,
-  data_quality_report: mockDataQualityReport,
-  dashboard_summary: dashboardSummaryMock,
-};
 
 function riskTone(level: RiskLevel) {
   if (level === "high") return "danger";
@@ -70,8 +54,8 @@ function LoadingState() {
 }
 
 export default function DashboardPage() {
-  const [dashboardData, setDashboardData] = useState<DashboardSummaryApiResponse>(fallbackDashboard);
-  const [taskData, setTaskData] = useState<TasksApiResponse>(tasksMock);
+  const [dashboardData, setDashboardData] = useState<DashboardSummaryApiResponse>(emptyDashboardResponse);
+  const [taskData, setTaskData] = useState<TasksApiResponse>(emptyTasksResponse);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -95,9 +79,9 @@ export default function DashboardPage() {
       })
       .catch(() => {
         if (!active) return;
-        setDashboardData(fallbackDashboard);
-        setTaskData(tasksMock);
-        setLoadError("接口暂时不可用，当前页面已切换到本地演示数据。");
+        setDashboardData(emptyDashboardResponse);
+        setTaskData(emptyTasksResponse);
+        setLoadError("真实数据源暂时不可用，当前页面不展示测试数据。请检查生产数据库或平台只读连接。");
       })
       .finally(() => {
         if (active) setIsLoading(false);

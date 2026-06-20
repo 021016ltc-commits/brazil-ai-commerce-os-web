@@ -39,7 +39,7 @@ export const zhApp = {
     dataSource: "数据来源",
     lastUpdated: "最后更新",
     sqliteSource: "Shopee + SQLite",
-    mockSource: "备用数据",
+    mockSource: "测试数据已禁用",
     languageAndInterface: "语言与界面",
     chooseLanguage: "选择界面语言",
     savedLocally: "选择会保存到当前浏览器。",

@@ -27,7 +27,7 @@ This split gives the system two advantages:
 
 AI output is treated as a recommendation, not an order.
 
-The current system uses rules and mock analysis results. It does not call OpenAI, real AI models, or platform write APIs. Even when real AI is added later, it should only write suggestions into queues.
+The current system uses local rules over real business data. It does not call OpenAI, real AI models, or platform write APIs. Even when real AI is added later, it should only write suggestions into queues.
 
 The reason is simple: commerce execution can create direct financial and platform risk.
 
@@ -77,7 +77,7 @@ Current design rules:
 - Use `platform_shop_id` for channel shop ID.
 - Use `market_code` for country or regional scope.
 
-The seed data already includes multiple platform values:
+The platform-neutral schema supports multiple platform values:
 
 - Shopee
 - Mercado Livre

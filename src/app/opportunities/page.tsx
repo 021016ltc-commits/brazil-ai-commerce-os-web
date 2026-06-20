@@ -11,17 +11,9 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
-import {
-  opportunityKeywordsMock,
-  opportunityMarketScoreMock,
-  opportunityProductsMock,
-  opportunityScoreMock,
-} from "@/data/opportunitiesMock";
+import { emptyOpportunitiesResponse } from "@/data/emptyResponses";
 import { formatBrl } from "@/lib/format";
 import {
-  buildKeywordOpportunities,
-  buildRiskAlerts,
-  buildTodayOpportunities,
   riskLevelRank,
 } from "@/lib/opportunities";
 import type {
@@ -37,23 +29,10 @@ type RecommendationFilter = "all" | "A" | "B" | "C";
 type RiskFilter = "all" | RiskLevel;
 type SortKey = "opportunity_score" | "market_score" | "risk_level";
 
-const fallbackOpportunities: OpportunitiesApiResponse = {
-  source: "mock",
-  products: opportunityProductsMock,
-  keywords: opportunityKeywordsMock,
-  market_score: opportunityMarketScoreMock,
-  opportunity_score: opportunityScoreMock,
-  today_opportunities: buildTodayOpportunities(opportunityProductsMock, opportunityScoreMock),
-  keyword_opportunities: buildKeywordOpportunities(
-    opportunityKeywordsMock,
-    opportunityMarketScoreMock,
-    opportunityScoreMock,
-  ),
-  risk_alerts: buildRiskAlerts(opportunityProductsMock, opportunityScoreMock),
-};
+const fallbackOpportunities: OpportunitiesApiResponse = emptyOpportunitiesResponse;
 
 function sourceLabel(source: OpportunitiesApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function recommendationTone(level: "A" | "B" | "C") {
@@ -216,7 +195,7 @@ export default function OpportunitiesPage() {
                 {sourceLabel(data.source)}
               </span>
               <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                接口数据 + 备用数据
+                接口数据 + 真实数据
               </span>
             </div>
 

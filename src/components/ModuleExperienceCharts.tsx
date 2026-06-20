@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { BarChartCard, DonutChartCard, LineChartCard } from "@/components/Charts";
-import { actionExecutionQueueMock, actionExecutionStatsMock } from "@/data/actionsMock";
-import { businessImpactMock } from "@/data/businessImpactMock";
-import { decisionHistoryMock, decisionLearningMock, decisionMetricsMock } from "@/data/decisionFeedbackMock";
-import { selfOptimizationMock } from "@/data/selfOptimizationMock";
-import { shopeeInventoryMock, shopeeOrdersMock, shopeeProductsMock } from "@/connectors/shopee/mock";
+import {
+  emptyActionQueueResponse,
+  emptyBusinessImpactResponse,
+  emptyDecisionHistoryResponse,
+  emptyDecisionMetricsResponse,
+  emptySelfOptimizationResponse,
+  emptyShopeeInventoryResponse,
+  emptyShopeeOrdersResponse,
+  emptyShopeeProductsResponse,
+} from "@/data/emptyResponses";
 import { actionTypeLabelZh, decisionUserActionLabel, shopeeOrderStatusLabel, statusLabel } from "@/locales/zh-CN";
 import type {
   ActionExecutionQueueApiResponse,
@@ -20,45 +25,12 @@ import type {
   ShopeeReadOnlyApiResponse,
 } from "@/types";
 
-const actionFallback: ActionExecutionQueueApiResponse = {
-  source: "mock",
-  queue: actionExecutionQueueMock,
-  stats: actionExecutionStatsMock,
-};
-
-const decisionHistoryFallback: DecisionHistoryApiResponse = {
-  source: "mock",
-  history: decisionHistoryMock,
-};
-
-const decisionMetricsFallback: DecisionMetricsApiResponse = {
-  source: "mock",
-  generated_at: new Date().toISOString(),
-  metrics: decisionMetricsMock,
-  learning: decisionLearningMock,
-  history_count: decisionHistoryMock.length,
-};
-
-const shopeeOrdersFallback: ShopeeReadOnlyApiResponse<ShopeeOrder> = {
-  source: "mock",
-  data: shopeeOrdersMock,
-  synced_at: null,
-  readonly: true,
-};
-
-const shopeeProductsFallback: ShopeeReadOnlyApiResponse<ShopeeProduct> = {
-  source: "mock",
-  data: shopeeProductsMock,
-  synced_at: null,
-  readonly: true,
-};
-
-const shopeeInventoryFallback: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = {
-  source: "mock",
-  data: shopeeInventoryMock,
-  synced_at: null,
-  readonly: true,
-};
+const actionFallback: ActionExecutionQueueApiResponse = emptyActionQueueResponse;
+const decisionHistoryFallback: DecisionHistoryApiResponse = emptyDecisionHistoryResponse;
+const decisionMetricsFallback: DecisionMetricsApiResponse = emptyDecisionMetricsResponse;
+const shopeeOrdersFallback: ShopeeReadOnlyApiResponse<ShopeeOrder> = emptyShopeeOrdersResponse;
+const shopeeProductsFallback: ShopeeReadOnlyApiResponse<ShopeeProduct> = emptyShopeeProductsResponse;
+const shopeeInventoryFallback: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = emptyShopeeInventoryResponse;
 
 function countBy(items: string[]) {
   return items.reduce<Record<string, number>>((acc, item) => {
@@ -245,7 +217,7 @@ export function DecisionFeedbackExperienceCharts() {
 }
 
 export function BusinessImpactExperienceCharts() {
-  const [data, setData] = useState<BusinessImpactApiResponse>(businessImpactMock);
+  const [data, setData] = useState<BusinessImpactApiResponse>(emptyBusinessImpactResponse);
 
   useEffect(() => {
     let active = true;
@@ -255,7 +227,7 @@ export function BusinessImpactExperienceCharts() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(businessImpactMock);
+        if (active) setData(emptyBusinessImpactResponse);
       });
 
     return () => {
@@ -298,7 +270,7 @@ export function BusinessImpactExperienceCharts() {
 }
 
 export function SelfOptimizationExperienceCharts() {
-  const [data, setData] = useState<SelfOptimizationApiResponse>(selfOptimizationMock);
+  const [data, setData] = useState<SelfOptimizationApiResponse>(emptySelfOptimizationResponse);
 
   useEffect(() => {
     let active = true;
@@ -308,7 +280,7 @@ export function SelfOptimizationExperienceCharts() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(selfOptimizationMock);
+        if (active) setData(emptySelfOptimizationResponse);
       });
 
     return () => {

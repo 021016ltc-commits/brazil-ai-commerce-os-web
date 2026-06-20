@@ -15,13 +15,13 @@ Scan method:
 - SQLite `sqlite_master`
 - SQLite `PRAGMA table_info`
 - SQLite `PRAGMA index_list`
-- Row counts from the current local seed database
+- Row counts are historical snapshots and should be regenerated from the current real database.
 
 Important note:
 
 - The current SQLite schema does not define foreign key constraints.
 - Relationships below are logical relationships based on shared IDs such as `product_uid`, `seller_uid`, `keyword_uid`, `action_id`, and `approval_id`.
-- Vercel production is configured to use mock data by default, not this local SQLite file.
+- Vercel production should use PostgreSQL/Supabase via `DATABASE_URL`, not test sample data.
 
 ## 2. Table Overview
 
@@ -30,7 +30,7 @@ Important note:
 | `action_queue` | 6 | `action_id` | Stores suggested actions awaiting local review or status updates. |
 | `analysis_queue` | 6 | `analysis_id` | Stores packages or analysis jobs awaiting rules or future AI analysis. |
 | `approval_history` | 3 | `history_id` | Stores local approval decisions and reviewer notes. |
-| `crawl_logs` | 3 | `crawl_run_id` | Stores sync or crawler run logs. Current data is mock/seeded. |
+| `crawl_logs` | 3 | `crawl_run_id` | Stores sync or crawler run logs. |
 | `data_quality_report` | 3 | `report_id` | Stores data quality checks and warning status. |
 | `inventory_risk` | 4 | `risk_id` | Stores inventory-level risk alerts. |
 | `inventory_snapshot` | 1 | `inventory_snapshot_id` | Stores overall inventory health snapshot. |

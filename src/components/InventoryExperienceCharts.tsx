@@ -2,21 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BarChartCard, DonutChartCard, LineChartCard } from "@/components/Charts";
-import {
-  inventoryRiskMock,
-  inventorySnapshotMock,
-  inventoryStockMock,
-  reorderRecommendationMock,
-} from "@/data/inventoryMock";
+import { emptyInventoryResponse } from "@/data/emptyResponses";
 import type { InventoryApiResponse } from "@/types";
 
-const fallbackInventory: InventoryApiResponse = {
-  source: "mock",
-  snapshot: inventorySnapshotMock,
-  inventory_stock: inventoryStockMock,
-  inventory_risks: inventoryRiskMock,
-  reorder_recommendations: reorderRecommendationMock,
-};
+const fallbackInventory: InventoryApiResponse = emptyInventoryResponse;
 
 const statusLabels: Record<string, string> = {
   healthy: "健康库存",

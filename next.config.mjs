@@ -1,8 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  outputFileTracingIncludes: {
-    "/*": ["./data/brazil_ai_commerce_os.db"],
-  },
-};
+const nextConfig = {};
 
 export default nextConfig;

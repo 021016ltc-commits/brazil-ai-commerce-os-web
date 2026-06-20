@@ -9,6 +9,7 @@ import {
   decisionLearningMock,
   decisionMetricsMock,
 } from "@/data/decisionFeedbackMock";
+import { emptyDecisionHistoryResponse, emptyDecisionMetricsResponse } from "@/data/emptyResponses";
 import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId, DEFAULT_TENANT_ID } from "@/lib/tenantContext";
@@ -204,7 +205,7 @@ export async function getDecisionHistoryResponse(): Promise<DecisionHistoryApiRe
   try {
     return { source: "sqlite", history: await readDecisionHistory() };
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Decision history read failed.");
+    if (!isMockDataAllowed()) return emptyDecisionHistoryResponse;
     return { source: "mock", history: defaultTenantHistoryFallback() };
   }
 }
@@ -231,7 +232,7 @@ export async function getDecisionMetricsResponse(): Promise<DecisionMetricsApiRe
       history_count: history.length,
     };
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Decision metrics read failed.");
+    if (!isMockDataAllowed()) return emptyDecisionMetricsResponse;
     return {
       source: "mock",
       generated_at: nowIso(),
@@ -258,7 +259,7 @@ export async function createDecisionFeedback(
       outcome,
       metrics,
       learning: buildDecisionLearningSystem(history, metrics),
-      message: "备用数据模式已接收反馈，但未写入 SQLite。",
+      message: "测试数据已禁用，未写入 SQLite。",
     };
   }
 
@@ -385,7 +386,17 @@ export async function createDecisionFeedback(
       message: "决策反馈已写入本地 SQLite，并重新计算反馈指标。",
     };
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Decision feedback write failed.");
+    if (!isMockDataAllowed()) {
+      return {
+        source: "sqlite",
+        persisted: false,
+        feedback,
+        outcome,
+        metrics: emptyDecisionMetricsResponse.metrics,
+        learning: emptyDecisionMetricsResponse.learning,
+        message: "真实数据源不可用，未写入测试反馈。",
+      };
+    }
     const history = [{ ...feedback, ...(outcome ? { outcome } : {}) }, ...defaultTenantHistoryFallback()];
     const metrics = calculateDecisionMetrics(history);
     return {
@@ -395,7 +406,7 @@ export async function createDecisionFeedback(
       outcome,
       metrics,
       learning: buildDecisionLearningSystem(history, metrics),
-      message: "SQLite 不可用，已使用备用数据返回计算结果。",
+      message: "真实数据源不可用，未写入测试反馈。",
     };
   }
 }

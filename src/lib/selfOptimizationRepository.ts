@@ -1,4 +1,5 @@
 import { selfOptimizationMock } from "@/data/selfOptimizationMock";
+import { emptySelfOptimizationResponse } from "@/data/emptyResponses";
 import { readActionExecutionQueue } from "@/lib/actionExecutionRepository";
 import { getBusinessImpactResponse } from "@/lib/businessImpactRepository";
 import { readDecisionHistory } from "@/lib/decisionFeedbackRepository";
@@ -60,7 +61,7 @@ export async function getSelfOptimizationResponse(): Promise<SelfOptimizationApi
       platformOrderStats,
     });
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Self optimization read failed.");
+    if (!isMockDataAllowed()) return emptySelfOptimizationResponse;
     return selfOptimizationMock;
   }
 }

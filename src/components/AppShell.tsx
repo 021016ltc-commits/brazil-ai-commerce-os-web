@@ -30,7 +30,6 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { PageHeader } from "@/components/PageHeader";
 import { QuickActions } from "@/components/QuickActions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -260,7 +259,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   当前角色没有“{currentPageTitle}”权限。演示环境保留页面可见，但管理操作会被限制。
                 </div>
               ) : null}
-              <PageHeader />
               <QuickActions />
               {children}
             </div>

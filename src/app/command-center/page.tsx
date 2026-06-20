@@ -20,10 +20,13 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { dailyOpsMock } from "@/data/dailyOpsMock";
-import { dashboardSummaryMock } from "@/data/dashboardMock";
-import { tasksMock } from "@/data/tasksMock";
-import { verificationMock } from "@/data/verificationMock";
+import {
+  emptyDailyOpsResponse,
+  emptyDashboardResponse,
+  emptySystemHealthResponse,
+  emptyTasksResponse,
+  emptyVerificationResponse,
+} from "@/data/emptyResponses";
 import { riskLevelLabel, sourceModuleLabel, zhCN } from "@/locales/zh-CN";
 import type {
   ApiDataSource,
@@ -58,95 +61,12 @@ type CommandState = {
   verification: VerificationStatusApiResponse;
 };
 
-const generatedAt = "2026-06-19T09:00:00-03:00";
-
-const fallbackDashboard: DashboardSummaryApiResponse = {
-  source: "mock",
-  products: [],
-  action_queue: [],
-  crawl_logs: [],
-  data_quality_report: [],
-  dashboard_summary: dashboardSummaryMock,
-};
-
-const fallbackSystemHealth: SystemHealthApiResponse = {
-  source: "mock",
-  generated_at: generatedAt,
-  api_health: [],
-  data_consistency: [],
-  data_source_status: {
-    sqlite_available: false,
-    mock_fallback_active: true,
-    last_db_init_time: null,
-  },
-  production_runtime: {
-    system_mode: "development",
-    production_mode_status: "inactive",
-    scheduler_status: "disabled",
-    scheduler_running_status: "disabled",
-    scheduler: {
-      enabled: false,
-      running: false,
-      started_at: null,
-      last_run_at: null,
-      next_run_at: null,
-      last_cycle_runtime_ms: null,
-      last_error: null,
-      retry_count: 0,
-      cycle_count: 0,
-      cron_active: false,
-      server_instance_id: "local",
-      production_trace_id: "local",
-    },
-    database_status: "failed",
-    database: {
-      active_mode: "mock",
-      postgres_configured: false,
-      sqlite_fallback_active: false,
-      connection_status: "failed",
-      schema_compatible: false,
-      missing_tables: [],
-      checked_at: generatedAt,
-      retry_count: 0,
-      error: null,
-    },
-    cache: {
-      cache_mode: "memory",
-      enabled: true,
-      entries: 0,
-      hits: 0,
-      misses: 0,
-      writes: 0,
-      hit_rate: 0,
-      last_rebuild_at: null,
-    },
-    api_latency: 0,
-    api_latency_ms: 0,
-    cache_hit_rate: 0,
-    sync_lag: null,
-    sync_lag_seconds: null,
-    last_cycle_time: null,
-    last_cycle_runtime_ms: null,
-    server_instance_id: "local",
-    production_trace_id: "local",
-    logs_converged: false,
-  },
-  system_health_score: 0,
-  score_breakdown: {
-    api_failure_rate: 0,
-    data_missing_rate: 0,
-    mock_ratio: 1,
-    task_anomaly_rate: 0,
-  },
-  logs: [],
-};
-
 const fallbackState: CommandState = {
-  dashboard: fallbackDashboard,
-  tasks: tasksMock,
-  dailyOps: dailyOpsMock,
-  systemHealth: fallbackSystemHealth,
-  verification: verificationMock,
+  dashboard: emptyDashboardResponse,
+  tasks: emptyTasksResponse,
+  dailyOps: emptyDailyOpsResponse,
+  systemHealth: emptySystemHealthResponse,
+  verification: emptyVerificationResponse,
 };
 
 const quickLinks = [
@@ -199,9 +119,8 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function sourceLabel(source: ApiDataSource | "unknown") {
-  if (source === "sqlite") return "本地数据库";
-  if (source === "mock") return "备用数据";
-  return "未知";
+  if (source === "sqlite") return "真实数据";
+  return "测试数据已禁用";
 }
 
 async function readApi<T>(url: string, fallback: T): Promise<T> {
@@ -360,17 +279,17 @@ function CommandList({ items }: { items: CommandItem[] }) {
 
 export default function CommandCenterPage() {
   const [state, setState] = useState<CommandState>(fallbackState);
-  const [loadedAt, setLoadedAt] = useState(generatedAt);
+  const [loadedAt, setLoadedAt] = useState(new Date().toISOString());
 
   useEffect(() => {
     let active = true;
 
     Promise.all([
-      readApi<DashboardSummaryApiResponse>("/api/dashboard-summary", fallbackDashboard),
-      readApi<TasksApiResponse>("/api/tasks", tasksMock),
-      readApi<DailyOpsApiResponse>("/api/daily-ops", dailyOpsMock),
-      readApi<SystemHealthApiResponse>("/api/system-health", fallbackSystemHealth),
-      readApi<VerificationStatusApiResponse>("/api/verification/status", verificationMock),
+      readApi<DashboardSummaryApiResponse>("/api/dashboard-summary", emptyDashboardResponse),
+      readApi<TasksApiResponse>("/api/tasks", emptyTasksResponse),
+      readApi<DailyOpsApiResponse>("/api/daily-ops", emptyDailyOpsResponse),
+      readApi<SystemHealthApiResponse>("/api/system-health", emptySystemHealthResponse),
+      readApi<VerificationStatusApiResponse>("/api/verification/status", emptyVerificationResponse),
     ]).then(([dashboard, tasks, dailyOps, systemHealth, verification]) => {
       if (!active) return;
       setState({ dashboard, tasks, dailyOps, systemHealth, verification });
@@ -516,7 +435,7 @@ export default function CommandCenterPage() {
         <MetricTile label="高风险提醒" value={`${operating.high_risk_alert_count}`} detail={`断货风险 ${operating.stockout_risk_count}，低利润商品 ${operating.low_profit_product_count}。`} icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} />
         <MetricTile label="今日机会" value={`${operating.today_opportunity_count}`} detail={`高优先级建议 ${operating.high_priority_recommendation_count}。`} icon={<TrendingUp className="h-5 w-5" aria-hidden="true" />} />
         <MetricTile label="系统健康" value={`${state.systemHealth.system_health_score}`} detail={`接口健康 ${percent(apiHealthRate)}，验收状态 ${verificationAvailableLabel}。`} icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />} />
-        <MetricTile label="数据源" value={sourceLabel(system.data_source)} detail={`数据库 ${sqliteAvailable ? "可用" : "不可用"}，备用数据占比 ${percent(mockRatio)}。`} icon={<Database className="h-5 w-5" aria-hidden="true" />} />
+        <MetricTile label="数据源" value={sourceLabel(system.data_source)} detail={`数据库 ${sqliteAvailable ? "可用" : "不可用"}，测试数据已禁用。`} icon={<Database className="h-5 w-5" aria-hidden="true" />} />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-3">
@@ -563,13 +482,13 @@ export default function CommandCenterPage() {
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
               <div className="text-sm font-medium text-slate-600">数据库健康</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{sqliteAvailable ? "正常" : "备用数据"}</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{sqliteAvailable ? "正常" : "未连接"}</div>
               <div className="mt-1 text-xs text-slate-500">最近初始化 {formatDateTime(state.systemHealth.data_source_status.last_db_init_time)}</div>
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
-              <div className="text-sm font-medium text-slate-600">备用数据占比</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{percent(mockRatio)}</div>
-              <div className="mt-1 text-xs text-slate-500">备用数据占比</div>
+              <div className="text-sm font-medium text-slate-600">测试数据状态</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{mockRatio > 0 ? "异常" : "已禁用"}</div>
+              <div className="mt-1 text-xs text-slate-500">测试数据默认禁用</div>
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
               <div className="text-sm font-medium text-slate-600">数据更新时间</div>

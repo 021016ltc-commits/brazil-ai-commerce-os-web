@@ -34,7 +34,7 @@ export function getCacheMode(): CacheMode {
 export function getShopeeApiMode(): ShopeeApiMode {
   const value = normalized(process.env.SHOPEE_MODE || process.env.SHOOPE_API_MODE || process.env.SHOPEE_API_MODE);
   if (value === "real" || value === "readonly" || value === "sqlite" || value === "mock") return value;
-  return isProductionMode() ? "readonly" : "mock";
+  return isProductionMode() ? "readonly" : "sqlite";
 }
 
 export function getLogLevel(): LogLevel {
@@ -48,7 +48,7 @@ export function isDebugOutputAllowed() {
 }
 
 export function isMockDataAllowed() {
-  return !isProductionMode();
+  return false;
 }
 
 export function getRequestedDataSourceMode() {

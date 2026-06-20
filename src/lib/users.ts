@@ -6,6 +6,7 @@ import {
   userMock,
   userRoleMock,
 } from "@/data/usersMock";
+import { emptyOperationLogsResponse, emptyRolesResponse, emptyUsersResponse } from "@/data/emptyResponses";
 import { createProductionTraceId, getRuntimeEnvironmentTag, isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId, DEFAULT_TENANT_ID } from "@/lib/tenantContext";
@@ -279,11 +280,11 @@ export async function getUsersResponse(): Promise<UsersApiResponse> {
   try {
     const payload = await readUsersPayload();
     if (payload.users.length === 0 || payload.roles.length === 0 || payload.permissions.length === 0) {
-      return defaultTenantUserFallback();
+      return isMockDataAllowed() ? defaultTenantUserFallback() : emptyUsersResponse;
     }
     return { source: "sqlite", ...payload };
   } catch {
-    return defaultTenantUserFallback();
+    return isMockDataAllowed() ? defaultTenantUserFallback() : emptyUsersResponse;
   }
 }
 
@@ -292,10 +293,12 @@ export async function getRolesResponse(): Promise<RolesApiResponse> {
 
   try {
     const payload = await readUsersPayload();
-    if (payload.roles.length === 0 || payload.permissions.length === 0) return mockRolesResponse();
+    if (payload.roles.length === 0 || payload.permissions.length === 0) {
+      return isMockDataAllowed() ? mockRolesResponse() : emptyRolesResponse;
+    }
     return { source: "sqlite", roles: payload.roles, permissions: payload.permissions };
   } catch {
-    return mockRolesResponse();
+    return isMockDataAllowed() ? mockRolesResponse() : emptyRolesResponse;
   }
 }
 
@@ -323,7 +326,7 @@ export async function getOperationLogsResponse(): Promise<OperationLogsApiRespon
       operation_logs: logs.length > 0 || tenantId() !== DEFAULT_TENANT_ID ? logs : operationLogMock,
     };
   } catch {
-    return defaultTenantLogFallback();
+    return isMockDataAllowed() ? defaultTenantLogFallback() : emptyOperationLogsResponse;
   }
 }
 

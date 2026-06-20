@@ -17,7 +17,7 @@ import {
   ShieldAlert,
   Target,
 } from "lucide-react";
-import { tasksMock } from "@/data/tasksMock";
+import { emptyTasksResponse } from "@/data/emptyResponses";
 import type {
   TaskPriority,
   TaskSourceModule,
@@ -29,7 +29,7 @@ type PriorityFilter = "all" | TaskPriority;
 type SourceFilter = "all" | TaskSourceModule;
 type SortKey = "default" | "profit" | "risk" | "inventory" | "gmv";
 
-const fallbackTasks: TasksApiResponse = tasksMock;
+const fallbackTasks: TasksApiResponse = emptyTasksResponse;
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -44,7 +44,7 @@ function formatCount(value: number) {
 }
 
 function sourceLabel(source: TasksApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function priorityLabel(priority: TaskPriority) {
@@ -551,7 +551,7 @@ export default function TasksPage() {
         <SectionHeader
           eyebrow="AI建议"
           title="AI建议不等于自动执行"
-          description="这里的建议来自本地规则引擎和本地数据/备用数据。所有建议必须人工审核，不能自动上传、调价、补货或投广告。"
+          description="这里的建议来自本地规则引擎和真实业务数据。所有建议必须人工审核，不能自动上传、调价、补货或投广告。"
         />
 
         <div className="grid gap-4 xl:grid-cols-2">

@@ -1,4 +1,5 @@
 import { shopeeInventoryMock, shopeeOrdersMock, shopeeProductsMock } from "@/connectors/shopee/mock";
+import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId } from "@/lib/tenantContext";
 import type {
@@ -21,7 +22,7 @@ type RemoteShopeePayload = {
 };
 
 function shouldUseMockData() {
-  return process.env.DATA_SOURCE_MODE?.trim().toLowerCase() === "mock";
+  return isMockDataAllowed() && process.env.DATA_SOURCE_MODE?.trim().toLowerCase() === "mock";
 }
 
 function shopeeApiConfigured() {
@@ -268,7 +269,15 @@ async function cachedOrMock<T extends { synced_at?: string | null }, U>(
       };
     }
   } catch {
-    // Fall through to mock fallback.
+    // Fall through to empty response unless test data is explicitly enabled.
+  }
+
+  if (!isMockDataAllowed()) {
+    return {
+      source: "sqlite",
+      data: [],
+      synced_at: null,
+    };
   }
 
   return {
@@ -349,11 +358,11 @@ export async function getShopeeInventoryResponse(): Promise<ShopeeReadOnlyApiRes
 
 export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
   const syncedAt = nowIso();
-  let source: ShopeeDataSource = "mock";
+  let source: ShopeeDataSource = "sqlite";
   let payload: RemoteShopeePayload = {
-    orders: shopeeOrdersMock,
-    products: shopeeProductsMock,
-    inventory: shopeeInventoryMock,
+    orders: [],
+    products: [],
+    inventory: [],
   };
 
   if (!shouldUseMockData() && shopeeApiConfigured()) {
@@ -361,7 +370,14 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
       payload = await fetchRemoteShopeeData();
       source = "shopee_api";
     } catch {
-      source = "mock";
+      source = isMockDataAllowed() ? "mock" : "sqlite";
+      if (isMockDataAllowed()) {
+        payload = {
+          orders: shopeeOrdersMock,
+          products: shopeeProductsMock,
+          inventory: shopeeInventoryMock,
+        };
+      }
     }
   }
 

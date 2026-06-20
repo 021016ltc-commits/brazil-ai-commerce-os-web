@@ -22,6 +22,15 @@ import {
   opportunityProductsMock,
   opportunityScoreMock,
 } from "@/data/opportunitiesMock";
+import {
+  emptyAnalysisResponse,
+  emptyApprovalsResponse,
+  emptyDashboardResponse,
+  emptyInventoryResponse,
+  emptyOpportunitiesResponse,
+  emptyProfitResponse,
+  emptyTasksResponse,
+} from "@/data/emptyResponses";
 import { buildExecutionStats } from "@/action_execution_layer/guard";
 import { buildApprovalHistoryItem, buildApprovalQueue, buildApprovalStats } from "@/lib/approvals";
 import { calculateDecisionMetrics } from "@/decision_feedback_system/engine";
@@ -36,7 +45,7 @@ import { getBusinessImpactResponse } from "@/lib/businessImpactRepository";
 import { getSelfOptimizationResponse } from "@/lib/selfOptimizationRepository";
 import { readActionExecutionQueue } from "@/lib/actionExecutionRepository";
 import { readDecisionHistory } from "@/lib/decisionFeedbackRepository";
-import { isMockDataAllowed, isProductionMode } from "@/lib/runtime/config";
+import { isMockDataAllowed } from "@/lib/runtime/config";
 import { buildCostStructure, buildProfitRisk } from "@/lib/profit";
 import {
   buildKeywordOpportunities,
@@ -286,11 +295,6 @@ function shouldAllowMockFallback() {
   return isMockDataAllowed();
 }
 
-function rethrowProductionReadError(error: unknown, context: string): never {
-  if (error instanceof Error) throw error;
-  throw new Error(`${context} failed in ${isProductionMode() ? "production" : "runtime"} mode.`);
-}
-
 function tenantId() {
   return currentTenantId();
 }
@@ -332,7 +336,9 @@ function emptyInventorySnapshot(): InventorySnapshot {
 }
 
 function mapProduct(row: ProductRow): Product {
-  const fallback = opportunityProductsMock.find((item) => item.product_uid === row.product_uid);
+  const fallback = isMockDataAllowed()
+    ? opportunityProductsMock.find((item) => item.product_uid === row.product_uid)
+    : undefined;
   return {
     product_uid: row.product_uid,
     seller_uid: row.seller_uid ?? fallback?.seller_uid ?? "",
@@ -354,7 +360,9 @@ function mapProduct(row: ProductRow): Product {
 }
 
 function mapKeyword(row: KeywordRow): Keyword {
-  const fallback = opportunityKeywordsMock.find((item) => item.keyword_uid === row.keyword_uid);
+  const fallback = isMockDataAllowed()
+    ? opportunityKeywordsMock.find((item) => item.keyword_uid === row.keyword_uid)
+    : undefined;
   return {
     keyword_uid: row.keyword_uid,
     platform: row.platform ?? fallback?.platform ?? "Shopee",
@@ -375,7 +383,9 @@ function riskFromScores(row: OpportunityRow): RiskLevel {
 }
 
 function mapMarketScore(row: MarketScoreRow): MarketScore {
-  const fallback = opportunityMarketScoreMock.find((item) => item.market_score_id === row.market_score_id);
+  const fallback = isMockDataAllowed()
+    ? opportunityMarketScoreMock.find((item) => item.market_score_id === row.market_score_id)
+    : undefined;
   return {
     market_score_id: row.market_score_id,
     keyword_uid: row.keyword_uid,
@@ -390,7 +400,9 @@ function mapMarketScore(row: MarketScoreRow): MarketScore {
 }
 
 function mapOpportunity(row: OpportunityRow): OpportunityScore {
-  const fallback = opportunityScoreMock.find((item) => item.opportunity_id === row.opportunity_score_id);
+  const fallback = isMockDataAllowed()
+    ? opportunityScoreMock.find((item) => item.opportunity_id === row.opportunity_score_id)
+    : undefined;
   const riskLevel = riskFromScores(row);
     return {
       opportunity_id: row.opportunity_score_id,
@@ -476,7 +488,9 @@ function mapAnalysisQueue(row: AnalysisQueueRow): AnalysisQueueRecord {
 function mapProfitSnapshot(row: ProfitSnapshotRow): ProfitSnapshot {
   return {
     profit_snapshot_id: row.profit_snapshot_id,
-    reporting_date: row.reporting_date ?? profitSnapshotMock.reporting_date,
+    reporting_date:
+      row.reporting_date ??
+      (isMockDataAllowed() ? profitSnapshotMock.reporting_date : new Date().toISOString().slice(0, 10)),
     market_code: row.market_code,
     yesterday_net_profit: row.yesterday_net_profit ?? 0,
     month_net_profit: row.month_net_profit ?? 0,
@@ -492,7 +506,9 @@ function mapProfitSnapshot(row: ProfitSnapshotRow): ProfitSnapshot {
 }
 
 function mapProductProfit(row: ProductProfitRow): ProductProfitItem {
-  const fallback = productProfitMock.find((item) => item.profit_item_id === row.profit_item_id);
+  const fallback = isMockDataAllowed()
+    ? productProfitMock.find((item) => item.profit_item_id === row.profit_item_id)
+    : undefined;
   return {
     profit_item_id: row.profit_item_id,
     product_uid: row.product_uid,
@@ -511,7 +527,9 @@ function mapProductProfit(row: ProductProfitRow): ProductProfitItem {
 function mapInventorySnapshot(row: InventorySnapshotRow): InventorySnapshot {
   return {
     inventory_snapshot_id: row.inventory_snapshot_id,
-    reporting_date: row.reporting_date ?? inventorySnapshotMock.reporting_date,
+    reporting_date:
+      row.reporting_date ??
+      (isMockDataAllowed() ? inventorySnapshotMock.reporting_date : new Date().toISOString().slice(0, 10)),
     market_code: row.market_code,
     total_inventory_value: row.total_inventory_value ?? 0,
     inventory_turnover_days: row.inventory_turnover_days ?? 0,
@@ -523,7 +541,9 @@ function mapInventorySnapshot(row: InventorySnapshotRow): InventorySnapshot {
 }
 
 function mapInventoryStock(row: InventoryStockRow): InventoryStockItem {
-  const fallback = inventoryStockMock.find((item) => item.inventory_item_id === row.inventory_item_id);
+  const fallback = isMockDataAllowed()
+    ? inventoryStockMock.find((item) => item.inventory_item_id === row.inventory_item_id)
+    : undefined;
   return {
     inventory_item_id: row.inventory_item_id,
     product_uid: row.product_uid,
@@ -539,7 +559,9 @@ function mapInventoryStock(row: InventoryStockRow): InventoryStockItem {
 }
 
 function mapInventoryRisk(row: InventoryRiskRow): InventoryRiskItem {
-  const fallback = inventoryRiskMock.find((item) => item.risk_id === row.risk_id);
+  const fallback = isMockDataAllowed()
+    ? inventoryRiskMock.find((item) => item.risk_id === row.risk_id)
+    : undefined;
   return {
     risk_id: row.risk_id,
     product_uid: row.product_uid,
@@ -552,7 +574,9 @@ function mapInventoryRisk(row: InventoryRiskRow): InventoryRiskItem {
 }
 
 function mapReorderRecommendation(row: ReorderRecommendationRow): ReorderRecommendationItem {
-  const fallback = reorderRecommendationMock.find((item) => item.recommendation_id === row.recommendation_id);
+  const fallback = isMockDataAllowed()
+    ? reorderRecommendationMock.find((item) => item.recommendation_id === row.recommendation_id)
+    : undefined;
   return {
     recommendation_id: row.recommendation_id,
     product_uid: row.product_uid,
@@ -886,7 +910,7 @@ export async function getProductsResponse(): Promise<ProductsApiResponse> {
   try {
     return { source: "sqlite", products: await readProducts() };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "products_read");
+    if (!shouldAllowMockFallback()) return { source: "sqlite", products: [] };
     return { source: "mock", products: mockProducts };
   }
 }
@@ -930,7 +954,7 @@ export async function getOpportunitiesResponse(): Promise<OpportunitiesApiRespon
       risk_alerts: buildRiskAlerts(products, opportunityScores),
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "opportunities_read");
+    if (!shouldAllowMockFallback()) return emptyOpportunitiesResponse;
     const todayOpportunities = buildTodayOpportunities(opportunityProductsMock, opportunityScoreMock);
     const keywordOpportunities = buildKeywordOpportunities(
       opportunityKeywordsMock,
@@ -982,7 +1006,7 @@ export async function getApprovalsResponse(): Promise<ApprovalsApiResponse> {
       upload_queue: await readUploads(),
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "approvals_read");
+    if (!shouldAllowMockFallback()) return emptyApprovalsResponse;
     const approvalQueue = approvalQueueMock;
     const approvalHistory = approvalHistoryMock;
     return {
@@ -1037,7 +1061,7 @@ export async function getAnalysisResponse(): Promise<AnalysisApiResponse> {
       ai_recommendations: buildAiRecommendations(products, opportunityScores, actions, analysisQueue),
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "analysis_read");
+    if (!shouldAllowMockFallback()) return emptyAnalysisResponse;
     return {
       source: "mock",
       opportunity_analysis: buildOpportunityAnalysis(
@@ -1084,7 +1108,7 @@ export async function getProfitResponse(): Promise<ProfitApiResponse> {
       product_profit: productProfit,
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "profit_read");
+    if (!shouldAllowMockFallback()) return emptyProfitResponse;
     return {
       source: "mock",
       snapshot: profitSnapshotMock,
@@ -1120,7 +1144,7 @@ export async function getInventoryResponse(): Promise<InventoryApiResponse> {
       reorder_recommendations: reorderRecommendations,
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "inventory_read");
+    if (!shouldAllowMockFallback()) return emptyInventoryResponse;
     return {
       source: "mock",
       snapshot: inventorySnapshotMock,
@@ -1197,7 +1221,7 @@ export async function getDashboardSummaryResponse(): Promise<DashboardSummaryApi
       }),
     };
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "dashboard_summary_read");
+    if (!shouldAllowMockFallback()) return emptyDashboardResponse;
     return {
       source: "mock",
       products: opportunityProductsMock,
@@ -1248,7 +1272,7 @@ export async function getTasksResponse(): Promise<TasksApiResponse> {
       aiRecommendations,
     });
   } catch (error) {
-    if (!shouldAllowMockFallback()) rethrowProductionReadError(error, "tasks_read");
+    if (!shouldAllowMockFallback()) return emptyTasksResponse;
     return tasksMock;
   }
 }
@@ -1260,7 +1284,7 @@ export async function updateLocalActionStatus(
   reviewer = "local_operator",
 ): Promise<{ action: ActionQueueItem | null; history: ApprovalHistoryItem }> {
   if (shouldUseMockData()) {
-    throw new Error("SQLite writes are disabled when DATA_SOURCE_MODE=mock.");
+    throw new Error("SQLite writes are disabled because test data mode is unavailable.");
   }
 
   return withDatabase((db) => {

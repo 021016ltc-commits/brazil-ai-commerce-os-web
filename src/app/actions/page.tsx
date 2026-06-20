@@ -14,11 +14,7 @@ import {
 import { MetricCard } from "@/components/MetricCard";
 import { ActionsExperienceCharts } from "@/components/ModuleExperienceCharts";
 import { StatusPill } from "@/components/StatusPill";
-import {
-  actionExecutionHistoryMock,
-  actionExecutionQueueMock,
-} from "@/data/actionsMock";
-import { buildExecutionStats } from "@/action_execution_layer/guard";
+import { emptyActionHistoryResponse, emptyActionQueueResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { readStoredUser } from "@/lib/permissions";
 import { actionTypeLabelZh, statusLabel, suggestedByLabel, zhCN } from "@/locales/zh-CN";
@@ -33,16 +29,8 @@ import type {
   ExecutionSuggestedBy,
 } from "@/types";
 
-const fallbackQueue: ActionExecutionQueueApiResponse = {
-  source: "mock",
-  queue: actionExecutionQueueMock,
-  stats: buildExecutionStats(actionExecutionQueueMock),
-};
-
-const fallbackHistory: ActionExecutionHistoryApiResponse = {
-  source: "mock",
-  history: actionExecutionHistoryMock,
-};
+const fallbackQueue: ActionExecutionQueueApiResponse = emptyActionQueueResponse;
+const fallbackHistory: ActionExecutionHistoryApiResponse = emptyActionHistoryResponse;
 
 type CreateFormState = {
   action_type: ExecutionActionType;
@@ -55,15 +43,15 @@ type CreateFormState = {
 
 const initialForm: CreateFormState = {
   action_type: "purchase",
-  product_id: "ITEM-NEW",
+  product_id: "",
   product_uid: "",
-  platform: "Shopee",
+  platform: "",
   suggested_by: "taskSystem",
-  notes: "来自今日任务的本地模拟执行申请。",
+  notes: "",
 };
 
 function sourceLabel(source: ActionExecutionQueueApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function inputClass() {
@@ -153,7 +141,7 @@ export default function ActionsPage() {
       setMessage(result.message);
       await refreshData();
     } catch {
-      setMessage("创建失败，页面保持备用数据可用。");
+      setMessage("创建失败，未写入测试数据。请检查真实数据源连接。");
     }
   }
 

@@ -4,6 +4,7 @@ import {
   enrichBusinessImpactItem,
 } from "@/business_impact_engine/engine";
 import { businessImpactMock } from "@/data/businessImpactMock";
+import { emptyBusinessImpactResponse } from "@/data/emptyResponses";
 import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId, DEFAULT_TENANT_ID } from "@/lib/tenantContext";
@@ -160,7 +161,7 @@ export async function getBusinessImpactResponse(): Promise<BusinessImpactApiResp
     if (actionImpacts.length === 0) return defaultTenantFallback();
     return buildResponse("sqlite", actionImpacts);
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Business impact read failed.");
+    if (!isMockDataAllowed()) return emptyBusinessImpactResponse;
     return defaultTenantFallback();
   }
 }

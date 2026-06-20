@@ -11,6 +11,7 @@ import {
   Server,
   ShieldCheck,
 } from "lucide-react";
+import { emptySystemHealthResponse } from "@/data/emptyResponses";
 import type {
   ApiHealthCheckItem,
   DataConsistencyCheck,
@@ -30,104 +31,15 @@ const observedEndpoints = [
 ];
 
 const fallbackHealth: SystemHealthApiResponse = {
-  source: "mock",
-  generated_at: "",
+  ...emptySystemHealthResponse,
   api_health: observedEndpoints.map((endpoint) => ({
     endpoint,
     status: "fail",
     response_time: 0,
     data_source: "unknown",
     last_updated: "",
-    error: "系统健康接口暂不可用，页面正在使用备用数据。",
+    error: "系统健康接口暂不可用，未加载测试数据。",
   })),
-  data_consistency: [
-    {
-      check_name: "inventory_to_tasks",
-      label: "库存中心到今日任务",
-      mismatch_count: 0,
-      mismatch_items: [],
-      severity: "low",
-    },
-    {
-      check_name: "profit_to_tasks",
-      label: "利润中心到今日任务",
-      mismatch_count: 0,
-      mismatch_items: [],
-      severity: "low",
-    },
-    {
-      check_name: "approvals_to_tasks",
-      label: "审批中心到今日任务",
-      mismatch_count: 0,
-      mismatch_items: [],
-      severity: "low",
-    },
-  ],
-  data_source_status: {
-    sqlite_available: false,
-    mock_fallback_active: true,
-    last_db_init_time: null,
-  },
-  production_runtime: {
-    system_mode: "development",
-    production_mode_status: "inactive",
-    scheduler_status: "disabled",
-    scheduler_running_status: "disabled",
-    scheduler: {
-      enabled: false,
-      running: false,
-      started_at: null,
-      last_run_at: null,
-      next_run_at: null,
-      last_cycle_runtime_ms: null,
-      last_error: null,
-      retry_count: 0,
-      cycle_count: 0,
-      cron_active: false,
-      server_instance_id: "local",
-      production_trace_id: "local",
-    },
-    database_status: "failed",
-    database: {
-      active_mode: "mock",
-      postgres_configured: false,
-      sqlite_fallback_active: false,
-      connection_status: "failed",
-      schema_compatible: false,
-      missing_tables: [],
-      checked_at: "",
-      retry_count: 0,
-      error: null,
-    },
-    cache: {
-      cache_mode: "memory",
-      enabled: true,
-      entries: 0,
-      hits: 0,
-      misses: 0,
-      writes: 0,
-      hit_rate: 0,
-      last_rebuild_at: null,
-    },
-    api_latency: 0,
-    api_latency_ms: 0,
-    cache_hit_rate: 0,
-    sync_lag: null,
-    sync_lag_seconds: null,
-    last_cycle_time: null,
-    last_cycle_runtime_ms: null,
-    server_instance_id: "local",
-    production_trace_id: "local",
-    logs_converged: false,
-  },
-  system_health_score: 0,
-  score_breakdown: {
-    api_failure_rate: 1,
-    data_missing_rate: 1,
-    mock_ratio: 1,
-    task_anomaly_rate: 0,
-  },
-  logs: [],
 };
 
 function formatDateTime(value: string | null) {
@@ -145,8 +57,8 @@ function formatRate(value: number) {
 }
 
 function sourceLabel(source: SystemHealthApiResponse["source"] | ApiHealthCheckItem["data_source"]) {
-  if (source === "sqlite") return "本地数据";
-  if (source === "mock") return "备用数据";
+  if (source === "sqlite") return "真实数据";
+  if (source === "mock") return "测试数据已禁用";
   return "未知";
 }
 
@@ -385,9 +297,9 @@ export default function SystemHealthPage() {
         description: "核心接口返回空数据会增加缺失率。",
       },
       {
-        label: "备用数据比例",
+        label: "测试数据比例",
         value: data.score_breakdown.mock_ratio,
-        description: "本地数据不可用或显式备用数据模式会提高该比例。",
+        description: "生产口径下测试数据禁用；若出现比例升高，说明环境配置需要检查。",
       },
       {
         label: "任务异常率",
@@ -480,9 +392,9 @@ export default function SystemHealthPage() {
           tone={mismatchCount > 0 ? "warn" : "good"}
         />
         <KpiCard
-          label="备用数据"
+          label="测试数据"
           value={data.data_source_status.mock_fallback_active ? "启用" : "未启用"}
-          detail="当本地数据不可用或部署环境使用备用数据时会显示启用。"
+          detail="生产口径下应保持禁用，只展示真实数据或空状态。"
           icon={<Database className="h-5 w-5" aria-hidden="true" />}
           tone={data.data_source_status.mock_fallback_active ? "warn" : "good"}
         />
@@ -584,9 +496,9 @@ export default function SystemHealthPage() {
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">
                 数据源状态
               </div>
-              <h2 className="mt-2 text-xl font-semibold text-ink">本地数据与备用数据</h2>
+              <h2 className="mt-2 text-xl font-semibold text-ink">真实数据源状态</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                用于判断当前看到的数据来自本地数据，还是因为环境限制回退到备用数据。
+                用于判断当前真实数据源是否可用；测试数据已默认禁用。
               </p>
             </div>
             <Server className="h-5 w-5 text-slate-500" aria-hidden="true" />
@@ -600,7 +512,7 @@ export default function SystemHealthPage() {
               </div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">备用数据启用</div>
+              <div className="text-xs uppercase tracking-wide text-slate-400">测试数据启用</div>
               <div className="mt-2">
                 <Badge status={data.data_source_status.mock_fallback_active ? "medium" : "low"} />
               </div>
@@ -622,7 +534,7 @@ export default function SystemHealthPage() {
               </div>
               <h2 className="mt-2 text-xl font-semibold text-ink">为什么是这个分数</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                评分依据接口失败率、数据缺失率、备用数据比例和任务异常率综合计算。
+                评分依据接口失败率、数据缺失率、测试数据比例和任务异常率综合计算。
               </p>
             </div>
             <ShieldCheck className="h-5 w-5 text-slate-500" aria-hidden="true" />

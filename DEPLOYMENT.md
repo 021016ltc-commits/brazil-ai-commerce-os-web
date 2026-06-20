@@ -7,7 +7,7 @@ Task 4 made the current system deployment-ready. Production Deployment Finalizat
 - Keep Dashboard, Opportunities, Approvals, and System behavior unchanged.
 - Keep local SQLite/API mode for development.
 - Use production mode on Vercel by default, with PostgreSQL/Supabase as the intended production database.
-- Keep SQLite and mock fallback for development and local verification only; production runtime disables mock priority.
+- Keep SQLite for local real-data development; test data is disabled by default.
 - Keep Shopee read-only. No write operation is enabled.
 
 ## Environment Variables
@@ -18,7 +18,7 @@ Task 4 made the current system deployment-ready. Production Deployment Finalizat
 | `DATA_SOURCE_MODE` | `sqlite` locally, `postgres` on Vercel | Yes | `sqlite` is for local development. `postgres`/`supabase` is the production target. `mock` is ignored as a priority source in production. |
 | `DATABASE_URL` | empty locally | Production required | PostgreSQL/Supabase connection string. Local production verification may fall back to SQLite when this is empty. |
 | `SQLITE_DB_PATH` | `./data/brazil_ai_commerce_os.db` | Local only | Path to the local SQLite database. Relative paths resolve from the project root. |
-| `SHOPEE_MODE` | `mock` locally, `readonly` in production | Yes | Canonical Shopee connector mode. Production must remain `readonly`. |
+| `SHOPEE_MODE` | `readonly` | Yes | Canonical Shopee connector mode. Production must remain `readonly`. |
 | `SHOOPE_API_MODE` | mirrors `SHOPEE_MODE` | No | Backward-compatible alias for older task spelling. |
 | `SHOPEE_API_MODE` | mirrors `SHOPEE_MODE` | No | Backward-compatible alias. |
 | `CACHE_MODE` | `memory` locally, `memory_or_upstash` in production | Yes | `memory_or_upstash` uses memory cache today and leaves room for Upstash without API changes. `disabled` disables cache. |
@@ -45,11 +45,10 @@ Install dependencies:
 npm install
 ```
 
-Initialize and seed the local database:
+Initialize the local database schema:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 ```
 
 Build for production:
@@ -127,14 +126,13 @@ brazil-ai-commerce-os-web/
   src/app/                  Next.js pages and API routes
   src/app/api/              Local API layer
   src/components/           Shared UI components
-  src/data/mock.ts          Mock fallback data
-  src/lib/dbRepository.ts   SQLite repository with dev-only mock fallback
+  src/data/emptyResponses.ts Empty real-data response shapes
+  src/lib/dbRepository.ts   SQLite repository with real-data reads
   src/lib/sqlite.ts         Local SQLite adapter
   src/lib/database.ts       Unified database client
   src/lib/database/         Production database adapter
   src/lib/runtime/          Production runtime config, bootstrap, and autonomous scheduler
   scripts/init_db.py        SQLite schema initializer
-  scripts/seed_mock_data.py Mock seed data loader
   scripts/start-production.ts Production startup wrapper
   data/                     Local SQLite database folder
   vercel.json               Vercel deployment configuration

@@ -11,7 +11,7 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
-import { operationLogMock, permissionMock, roleMock, userMock, userRoleMock } from "@/data/usersMock";
+import { emptyOperationLogsResponse, emptyUsersResponse } from "@/data/emptyResponses";
 import {
   readStoredUser,
   resourceLabels,
@@ -30,23 +30,13 @@ import type {
   UserStatus,
 } from "@/types";
 
-const fallbackUsers: UsersApiResponse = {
-  source: "mock",
-  users: userMock,
-  roles: roleMock,
-  permissions: permissionMock,
-  user_roles: userRoleMock,
-};
-
-const fallbackLogs: OperationLogsApiResponse = {
-  source: "mock",
-  operation_logs: operationLogMock,
-};
+const fallbackUsers: UsersApiResponse = emptyUsersResponse;
+const fallbackLogs: OperationLogsApiResponse = emptyOperationLogsResponse;
 
 const roleOptions: UserRoleName[] = ["admin", "operator", "buyer", "finance", "viewer"];
 
 function sourceLabel(source: "sqlite" | "mock") {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function permissionActionLabel(action: string) {

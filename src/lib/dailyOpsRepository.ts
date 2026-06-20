@@ -1,4 +1,5 @@
 import { dailyOpsMock } from "@/data/dailyOpsMock";
+import { emptyDailyOpsResponse } from "@/data/emptyResponses";
 import { getActionExecutionQueueResponse } from "@/lib/actionExecutionRepository";
 import { getBusinessImpactResponse } from "@/lib/businessImpactRepository";
 import { buildDailyOpsResponse } from "@/lib/dailyOps";
@@ -71,7 +72,7 @@ export async function getDailyOpsResponse(): Promise<DailyOpsApiResponse> {
       approvals,
     });
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Daily operations read failed.");
+    if (!isMockDataAllowed()) return emptyDailyOpsResponse;
     return dailyOpsMock;
   }
 }

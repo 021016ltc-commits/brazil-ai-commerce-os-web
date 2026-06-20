@@ -21,7 +21,7 @@ Current implementation stage:
 - Web MVP completed.
 - SQLite local database completed.
 - API layer completed.
-- Mock fallback completed.
+- Real-data empty-state fallback completed.
 - Deployment-ready Vercel config completed.
 - Core local business centers completed through Task 10.
 - Today's Task Center completed through Task 11B.
@@ -37,14 +37,14 @@ Runtime stack:
 - Local API routes under `src/app/api`
 - Repository layer under `src/lib/dbRepository.ts`
 - SQLite local database at `data/brazil_ai_commerce_os.db`
-- Mock fallback data under `src/data`
-- Vercel deployment config with `DATA_SOURCE_MODE=mock`
+- Empty response shapes under `src/data`
+- Vercel deployment config with `DATA_SOURCE_MODE=postgres`
 
 Data source strategy:
 
 - Local development prefers SQLite.
-- If SQLite is missing or unavailable, API routes return mock fallback data.
-- Vercel uses mock by default because local SQLite is not durable in Vercel serverless runtime.
+- If SQLite/PostgreSQL is missing or unavailable, UI routes show empty states or connection messages.
+- Vercel uses PostgreSQL/Supabase through `DATABASE_URL` for production data.
 
 Current user-facing routes:
 
@@ -81,13 +81,13 @@ Task 3A - SQLite database:
 
 - Created local SQLite database.
 - Added initialization script.
-- Added mock seed script.
+- Seed data script removed from the production-ready flow.
 
 Task 3B - API-driven UI:
 
 - Added local API layer.
 - Pages read from API first.
-- SQLite plus mock fallback works.
+- SQLite reads and empty-state handling work.
 
 Task 4 - Deployment ready:
 
@@ -206,7 +206,7 @@ Priority 5 - Controlled execution:
 - Database-first development.
 - English field names, Chinese UI.
 - Platform-neutral schema.
-- SQLite plus mock fallback.
+- SQLite/PostgreSQL real-data flow with empty-state handling.
 - Human approval before execution.
 - No automatic listing, pricing, image, title, or ad budget changes.
 - Historical and operational data should not be overwritten when future incremental ingestion is added.

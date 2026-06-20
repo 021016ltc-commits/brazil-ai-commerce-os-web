@@ -19,10 +19,10 @@ Current product status:
 - Next.js App Router project.
 - Local SQLite database exists at data/brazil_ai_commerce_os.db.
 - API routes exist under src/app/api.
-- SQLite plus mock fallback is implemented.
+- SQLite/PostgreSQL real-data flow with empty-state fallback is implemented.
 - Vercel deployment config exists.
-- Vercel should use DATA_SOURCE_MODE=mock by default.
-- Local development should use DATA_SOURCE_MODE=sqlite and fallback to mock if unavailable.
+- Vercel should use DATA_SOURCE_MODE=postgres with DATABASE_URL.
+- Local development should use DATA_SOURCE_MODE=sqlite and show empty states if unavailable.
 
 Current pages:
 - /login
@@ -48,7 +48,6 @@ Current APIs:
 
 Current database scripts:
 - scripts/init_db.py
-- scripts/seed_mock_data.py
 
 Current documentation:
 - README.md
@@ -118,7 +117,6 @@ Recommended orientation before coding:
 
 Local verification commands:
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run build
 npm run dev
 
@@ -128,7 +126,7 @@ Expected safety behavior:
 - Build must pass.
 - Existing pages must keep working.
 - API should return SQLite data locally when the database is available.
-- API should return mock fallback when SQLite is unavailable or DATA_SOURCE_MODE=mock.
+- API/UI should not display sample business data when SQLite/PostgreSQL is unavailable.
 - Vercel deployment should remain compatible.
 
 When implementing future tasks:
@@ -167,7 +165,7 @@ A future task is complete only when:
 
 - Requested files or pages are implemented.
 - Existing pages are not broken.
-- SQLite plus mock fallback behavior remains intact where required.
+- Real-data empty-state behavior remains intact where required.
 - README is updated when behavior changes.
 - `npm run build` or equivalent direct Next build passes.
 - Any real execution behavior remains blocked unless explicitly approved and designed.

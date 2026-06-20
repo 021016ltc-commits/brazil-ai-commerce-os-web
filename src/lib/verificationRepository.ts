@@ -1,4 +1,5 @@
 import { getShopeeOrdersResponse } from "@/connectors/shopee/service";
+import { emptyVerificationResponse } from "@/data/emptyResponses";
 import { verificationMock } from "@/data/verificationMock";
 import { getActionExecutionQueueResponse } from "@/lib/actionExecutionRepository";
 import { getBusinessImpactResponse } from "@/lib/businessImpactRepository";
@@ -12,6 +13,7 @@ import {
   getTasksResponse,
 } from "@/lib/dbRepository";
 import { getDecisionMetricsResponse } from "@/lib/decisionFeedbackRepository";
+import { isMockDataAllowed } from "@/lib/runtime/config";
 import { getSelfOptimizationResponse } from "@/lib/selfOptimizationRepository";
 import { getSystemHealthResponse } from "@/lib/systemHealth";
 import { getUsersResponse } from "@/lib/users";
@@ -296,6 +298,6 @@ export async function getVerificationStatusResponse(): Promise<VerificationStatu
       runtime_summary: runtimeSummary(modules, apiHealth, systemHealth),
     };
   } catch {
-    return verificationMock;
+    return isMockDataAllowed() ? verificationMock : emptyVerificationResponse;
   }
 }

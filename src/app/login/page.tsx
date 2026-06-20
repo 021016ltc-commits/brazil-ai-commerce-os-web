@@ -3,17 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, ShieldCheck } from "lucide-react";
-import { userMock } from "@/data/usersMock";
+import { emptyUsersResponse } from "@/data/emptyResponses";
 import { resourceLabels, roleLabels, storeLocalUser } from "@/lib/permissions";
 import type { UserItem, UsersApiResponse } from "@/types";
 
-const fallbackUsers: UsersApiResponse = {
-  source: "mock",
-  users: userMock,
-  roles: [],
-  permissions: [],
-  user_roles: [],
-};
+const fallbackUsers: UsersApiResponse = emptyUsersResponse;
 
 function permissionLabel(permission: string) {
   const [resource, action] = permission.split(":");
@@ -28,7 +22,7 @@ function permissionLabel(permission: string) {
 export default function LoginPage() {
   const router = useRouter();
   const [data, setData] = useState<UsersApiResponse>(fallbackUsers);
-  const [selectedUserId, setSelectedUserId] = useState("user_admin_001");
+  const [selectedUserId, setSelectedUserId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -38,7 +32,7 @@ export default function LoginPage() {
       .then((payload: UsersApiResponse) => {
         if (!active) return;
         setData(payload);
-        setSelectedUserId(payload.users[0]?.user_id ?? "user_admin_001");
+        setSelectedUserId(payload.users[0]?.user_id ?? "");
       })
       .catch(() => {
         if (active) setData(fallbackUsers);

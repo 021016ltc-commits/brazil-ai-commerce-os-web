@@ -2,17 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Building2, Database, Layers3, Plus, ShieldCheck, Users } from "lucide-react";
-import { tenantMock, tenantUsageMock, tenantUserMock, workspaceMock } from "@/data/tenantsMock";
+import { emptyTenantsResponse } from "@/data/emptyResponses";
 import type { PlanType, TenantItem, TenantsApiResponse, WorkspaceItem } from "@/types";
 
-const fallbackData: TenantsApiResponse = {
-  source: "mock",
-  tenant_id: "demo_tenant",
-  tenants: tenantMock,
-  workspaces: workspaceMock,
-  tenant_users: tenantUserMock,
-  usage: tenantUsageMock,
-};
+const fallbackData: TenantsApiResponse = emptyTenantsResponse;
 
 const planLabels: Record<PlanType, string> = {
   free: "Free",
@@ -21,7 +14,7 @@ const planLabels: Record<PlanType, string> = {
 };
 
 function sourceLabel(source: "sqlite" | "mock") {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function formatDate(value: string) {

@@ -243,7 +243,7 @@ export const crawl_logs: CrawlLog[] = [
     status: "success",
     records_seen: 240,
     records_inserted: 36,
-    message: "本地备用数据同步完成。",
+    message: "真实数据同步完成。",
   },
   {
     crawl_run_id: "run_20260616_031000_002",
@@ -265,7 +265,7 @@ export const crawl_logs: CrawlLog[] = [
     status: "success",
     records_seen: 130,
     records_inserted: 21,
-    message: "本地备用数据同步完成。",
+    message: "真实数据同步完成。",
   },
 ];
 

@@ -12,7 +12,7 @@ import {
   Target,
 } from "lucide-react";
 import { SelfOptimizationExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { selfOptimizationMock } from "@/data/selfOptimizationMock";
+import { emptySelfOptimizationResponse } from "@/data/emptyResponses";
 import { formatCount, formatPercent } from "@/lib/format";
 import type {
   SelfOptimizationApiResponse,
@@ -25,7 +25,7 @@ type GroupFilter = "all" | SelfOptimizationRuleGroup;
 type StatusFilter = "all" | SelfOptimizationStatus;
 
 function sourceLabel(source: SelfOptimizationApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function statusLabel(status: SelfOptimizationStatus) {
@@ -98,7 +98,7 @@ function MetricCard({
 }
 
 export default function SelfOptimizationPage() {
-  const [data, setData] = useState<SelfOptimizationApiResponse>(selfOptimizationMock);
+  const [data, setData] = useState<SelfOptimizationApiResponse>(emptySelfOptimizationResponse);
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -111,7 +111,7 @@ export default function SelfOptimizationPage() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(selfOptimizationMock);
+        if (active) setData(emptySelfOptimizationResponse);
       });
 
     return () => {

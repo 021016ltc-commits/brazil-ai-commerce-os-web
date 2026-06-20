@@ -1,49 +1,42 @@
-"use client";
+import type { ReactNode } from "react";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import { CalendarClock, Database } from "lucide-react";
-import { useLanguage } from "@/components/LanguageProvider";
-import { Badge } from "@/components/ui/Badge";
+type PageHeaderMeta = {
+  label: string;
+  value: string;
+};
 
-function formatTimestamp(locale: string, value: Date) {
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(value);
-}
-
-export function PageHeader() {
-  const pathname = usePathname();
-  const { locale, dictionary } = useLanguage();
-  const [lastUpdated, setLastUpdated] = useState("");
-
-  useEffect(() => {
-    setLastUpdated(formatTimestamp(locale, new Date()));
-  }, [locale, pathname]);
-
-  const title = dictionary.routes[pathname as keyof typeof dictionary.routes] ?? pathname;
-  const description =
-    dictionary.pageDescriptions[pathname as keyof typeof dictionary.pageDescriptions] ??
-    dictionary.app.subtitle;
-
+export function StandardPageHeader({
+  title,
+  description,
+  meta = [],
+  actions,
+}: {
+  title: string;
+  description: string;
+  meta?: PageHeaderMeta[];
+  actions?: ReactNode;
+}) {
   return (
     <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-          <p className="max-w-4xl text-sm leading-6 text-slate-600">{description}</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-ink">{title}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
+          {meta.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {meta.map((item) => (
+                <span
+                  key={`${item.label}-${item.value}`}
+                  className="inline-flex min-h-8 items-center rounded-md border border-line bg-slate-50 px-3 text-xs font-medium text-slate-600"
+                >
+                  <span className="text-slate-400">{item.label}：</span>
+                  <span className="ml-1 text-slate-700">{item.value}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="info">
-            <CalendarClock className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-            {dictionary.common.lastUpdated}: {lastUpdated || "-"}
-          </Badge>
-          <Badge tone="neutral">
-            <Database className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-            {dictionary.common.dataSource}: {dictionary.common.sqliteSource}
-          </Badge>
-        </div>
+        {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
       </div>
     </section>
   );

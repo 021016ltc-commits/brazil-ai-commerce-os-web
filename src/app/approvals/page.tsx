@@ -3,8 +3,7 @@
 import { Check, Clock3, Filter, History, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
-import { approvalHistoryMock, approvalQueueMock } from "@/data/approvalsMock";
-import { opportunityProductsMock } from "@/data/opportunitiesMock";
+import { emptyApprovalsResponse } from "@/data/emptyResponses";
 import { buildApprovalHistoryItem, buildApprovalStats, approvalPriorityRank } from "@/lib/approvals";
 import { formatPercent } from "@/lib/format";
 import { priorityLabel, riskLevelLabel } from "@/locales/zh-CN";
@@ -19,16 +18,10 @@ type StatusFilter = "all" | ReviewStatus;
 type PriorityFilter = "all" | "P1" | "P2" | "P3";
 type SortKey = "created_at" | "priority" | "status";
 
-const fallbackApprovals: ApprovalsApiResponse = {
-  source: "mock",
-  products: opportunityProductsMock,
-  approval_queue: approvalQueueMock,
-  approval_history: approvalHistoryMock,
-  approval_stats: buildApprovalStats(approvalQueueMock),
-};
+const fallbackApprovals: ApprovalsApiResponse = emptyApprovalsResponse;
 
 function sourceLabel(source: ApprovalsApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function recommendationTypeLabel(type: ApprovalQueueItem["recommendation_type"]) {

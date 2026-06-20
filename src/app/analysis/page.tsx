@@ -10,20 +10,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
-import { analysisQueueMock } from "@/data/analysisMock";
-import { action_queue as mockActionQueue } from "@/data/mock";
-import {
-  opportunityKeywordsMock,
-  opportunityMarketScoreMock,
-  opportunityProductsMock,
-  opportunityScoreMock,
-} from "@/data/opportunitiesMock";
+import { emptyAnalysisResponse } from "@/data/emptyResponses";
 import {
   analysisPriorityRank,
-  buildAiRecommendations,
-  buildMarketAnalysis,
-  buildOpportunityAnalysis,
-  buildRiskAnalysis,
   riskLevelRank,
 } from "@/lib/analysis";
 import type {
@@ -38,29 +27,10 @@ type RiskFilter = "all" | RiskLevel;
 type PriorityFilter = "all" | AnalysisPriority;
 type SortKey = "opportunity_score" | "risk_level" | "demand_score" | "priority";
 
-const fallbackAnalysis: AnalysisApiResponse = {
-  source: "mock",
-  opportunity_analysis: buildOpportunityAnalysis(
-    opportunityProductsMock,
-    opportunityScoreMock,
-    analysisQueueMock,
-  ),
-  risk_analysis: buildRiskAnalysis(opportunityProductsMock, opportunityScoreMock),
-  market_analysis: buildMarketAnalysis(
-    opportunityKeywordsMock,
-    opportunityMarketScoreMock,
-    opportunityScoreMock,
-  ),
-  ai_recommendations: buildAiRecommendations(
-    opportunityProductsMock,
-    opportunityScoreMock,
-    mockActionQueue,
-    analysisQueueMock,
-  ),
-};
+const fallbackAnalysis: AnalysisApiResponse = emptyAnalysisResponse;
 
 function sourceLabel(source: AnalysisApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function priorityTone(priority: AnalysisPriority) {
@@ -226,7 +196,7 @@ export default function AnalysisPage() {
                 {sourceLabel(data.source)}
               </span>
               <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                规则分析 + 备用数据
+                规则分析 + 真实数据
               </span>
             </div>
 
@@ -234,7 +204,7 @@ export default function AnalysisPage() {
               <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">数据分析</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                 这个页面把“哪些机会值得今天优先看、哪些风险会拖慢执行、哪些类目趋势还在走强、哪些建议该先进入人工判断”
-                放到同一个分析面板里。它不连接真实 AI 模型，而是用规则引擎把本地数据或备用数据整理成可执行的分析结论。
+                放到同一个分析面板里。它不连接真实 AI 模型，而是用规则引擎把真实业务数据整理成可执行的分析结论。
               </p>
             </div>
           </div>

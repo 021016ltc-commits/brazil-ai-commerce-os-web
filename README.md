@@ -1,6 +1,6 @@
 # Brazil AI Commerce OS Lite V0.1 - Web MVP
 
-Task 1 delivers a local Web MVP for Brazil AI Commerce OS Lite. Task 3B adds a local API layer backed by SQLite with mock fallback. Task 4 adds deployment-ready configuration. Task 5 upgrades `/opportunities` into an Opportunities Center that helps operators decide which products, keywords, and risks deserve attention today. Task 6 adds `/analysis` as a rules-based Analysis Center. Task 7 upgrades `/approvals` into a local human approval system. Task 8 adds `/profit` as a Profit Center for margin and cost monitoring. Task 9 adds `/inventory` as an Inventory Center for stock health, stockout risk, overstock pressure, and reorder review. Task 10 upgrades `/dashboard` into CEO Dashboard V2 so the owner can judge profit, cash flow, inventory risk, opportunity pressure, and pending approvals in one screen. Task 11B adds `/tasks` as Today's Task Center, turning module data into prioritized work items. Task 12 adds `/system-health` as a read-only System Health & Observability layer. Task 13 adds `/users` as a local User & Permission System. Task 14 adds `/shopee` as a Shopee read-only connector with SQLite cache and mock fallback. Task 15 adds `/decision-feedback` as a decision feedback and data loop for learning from historical results. Task 16 adds `/actions` as a guarded execution queue for approval-first simulated actions. Task 17 adds `/business-impact` as a read-only 经营结果分析 layer for profit, inventory, GMV, and decision attribution. Task 18 adds `/self-optimization` as a recommendation-only engine for rule and scoring weight optimization. Task 19 adds `/daily-ops` as a Daily Operations Control Center that aggregates decision, task, action, 经营结果分析, and 规则优化 data into a daily operating view. Task 20 adds `/verification` as a unified verification center for module checks, API health, quick test entries, and release acceptance mode. Task 21 adds `/tenants` as the multi-tenant SaaS foundation with tenant, workspace, subscription-plan display, tenant-scoped APIs, and default `demo_tenant` isolation. Task 22 adds `/command-center` as an internal-only Command Center that aggregates Dashboard, Tasks, Daily Ops, System Health, and Verification status into one operating console. Documentation Task 1 adds `/project-docs` as the project master documentation system.
+Task 1 delivers a local Web MVP for Brazil AI Commerce OS Lite. Task 3B adds a local API layer backed by SQLite. Task 4 adds deployment-ready configuration. Task 5 upgrades `/opportunities` into an Opportunities Center that helps operators decide which products, keywords, and risks deserve attention today. Task 6 adds `/analysis` as a rules-based Analysis Center. Task 7 upgrades `/approvals` into a local human approval system. Task 8 adds `/profit` as a Profit Center for margin and cost monitoring. Task 9 adds `/inventory` as an Inventory Center for stock health, stockout risk, overstock pressure, and reorder review. Task 10 upgrades `/dashboard` into CEO Dashboard V2 so the owner can judge profit, cash flow, inventory risk, opportunity pressure, and pending approvals in one screen. Task 11B adds `/tasks` as Today's Task Center, turning module data into prioritized work items. Task 12 adds `/system-health` as a read-only System Health & Observability layer. Task 13 adds `/users` as a local User & Permission System. Task 14 adds `/shopee` as a Shopee read-only connector with SQLite cache and read-only API preparation. Task 15 adds `/decision-feedback` as a decision feedback and data loop for learning from historical results. Task 16 adds `/actions` as a guarded execution queue for approval-first simulated actions. Task 17 adds `/business-impact` as a read-only 经营结果分析 layer for profit, inventory, GMV, and decision attribution. Task 18 adds `/self-optimization` as a recommendation-only engine for rule and scoring weight optimization. Task 19 adds `/daily-ops` as a Daily Operations Control Center that aggregates decision, task, action, 经营结果分析, and 规则优化 data into a daily operating view. Task 20 adds `/verification` as a unified verification center for module checks, API health, quick test entries, and release acceptance mode. Task 21 adds `/tenants` as the multi-tenant SaaS foundation with tenant, workspace, subscription-plan display, tenant-scoped APIs, and default `demo_tenant` isolation. Task 22 adds `/command-center` as an internal-only Command Center that aggregates Dashboard, Tasks, Daily Ops, System Health, and Verification status into one operating console. Documentation Task 1 adds `/project-docs` as the project master documentation system.
 
 ## Run
 
@@ -99,7 +99,7 @@ Documentation scope:
 - Chinese UI text
 - English field names
 - Local SQLite/API data first
-- Mock fallback when SQLite is unavailable or disabled
+- Test data display disabled by default
 - Production data access is routed through `src/lib/dataService.ts` and `src/lib/database.ts`
 - No crawler work
 - No platform write API
@@ -128,7 +128,7 @@ SQLite tables:
 - `workspaces`
 - `tenant_users`
 
-Approve and Reject only update local `action_queue` status in SQLite when SQLite mode is available. In mock fallback mode, they return a mock API response and do not execute any platform action.
+Approve and Reject only update local `action_queue` status in SQLite when SQLite mode is available. They never execute any platform action.
 
 ## Platform-neutral fields
 
@@ -158,12 +158,6 @@ Initialize tables:
 python scripts/init_db.py
 ```
 
-Insert mock seed data:
-
-```bash
-python scripts/seed_mock_data.py
-```
-
 Check that the core tables exist:
 
 ```bash
@@ -186,12 +180,13 @@ Core files:
 - `src/lib/dataService.ts` - single DataService layer used by API routes for products, orders, inventory, tasks, users, decisions, approvals, actions, Shopee, profit, and system status.
 - `src/lib/cache.ts` - in-memory TTL cache for high-read API responses such as dashboard summary, profit, inventory, and tasks.
 - `src/lib/errorHandler.ts` - tenant-aware API wrapper with logging and safe fallback responses.
-- `src/lib/connectors/shopee.ts` - standardized read-only Shopee connector wrapper with token refresh support, rate-limit retry handling, SQLite cache reuse, and mock fallback.
+- `src/lib/connectors/shopee.ts` - standardized read-only Shopee connector wrapper with token refresh support, rate-limit retry handling, and SQLite cache reuse.
 
 Environment:
 
 ```bash
 DATA_SOURCE_MODE=sqlite
+ALLOW_TEST_DATA=false
 DATABASE_URL=
 SQLITE_DB_PATH=./data/brazil_ai_commerce_os.db
 CACHE_ENABLED=true
@@ -206,17 +201,17 @@ SHOPEE_READONLY_ACCESS_TOKEN=
 
 Data source behavior:
 
-1. If `DATA_SOURCE_MODE=mock`, APIs return mock fallback data.
-2. If `DATABASE_URL` is configured and a PostgreSQL driver is available, `src/lib/database.ts` can connect to PostgreSQL/Supabase.
-3. If PostgreSQL is not configured or unavailable, the system falls back to local SQLite.
-4. Existing repository functions still preserve SQLite-to-mock fallback, so unavailable local data does not crash the UI.
+1. If `DATABASE_URL` is configured and a PostgreSQL driver is available, `src/lib/database.ts` can connect to PostgreSQL/Supabase.
+2. If PostgreSQL is not configured or unavailable in local development, the system can read local SQLite.
+3. Test data is disabled by default with `ALLOW_TEST_DATA=false`.
+4. When a real data source is unavailable, pages render empty states or connection messages instead of sample business data.
 
 Important production notes:
 
 - No Shopee write operation is enabled.
 - No automatic purchase, price change, listing upload, or ad action is enabled.
 - Approval and action APIs only update local queues and logs.
-- Vercel demo deployments should continue to use `DATA_SOURCE_MODE=mock` unless a persistent database is provisioned.
+- Vercel production deployments should use PostgreSQL/Supabase through `DATABASE_URL`; do not use mock mode for operations.
 
 Shopee read-only sync modes:
 
@@ -272,13 +267,12 @@ API routes:
 - `GET /api/self-optimization/analysis`
 - `GET /api/verification/status`
 
-The UI keeps mock fallback data. If `data/brazil_ai_commerce_os.db` is missing or unreadable, the API returns `source: "mock"` and the pages keep rendering.
+The UI reads real local/API data. If `data/brazil_ai_commerce_os.db` is missing or unreadable, pages keep rendering but show empty states or connection messages instead of sample business data.
 
 Task 3B verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -298,7 +292,7 @@ Check API data source:
 python -c "import urllib.request, json; print(json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/dashboard-summary'))['source'])"
 ```
 
-Expected result after seeding:
+Real data verification example:
 
 ```text
 sqlite
@@ -344,7 +338,7 @@ Included in this page:
   - by `market_score`
   - by `risk_level`
 
-The page reads from `GET /api/opportunities` first and keeps a mock fallback. When SQLite is missing, unreadable, or disabled, the page still renders from mock data instead of breaking.
+The page reads from `GET /api/opportunities`. When the real data source is missing, unreadable, or disabled, the page keeps rendering with empty states instead of sample business data.
 
 `/api/opportunities` now returns:
 
@@ -361,7 +355,6 @@ Task 5 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -375,7 +368,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/opportunities')); print(data['source'], len(data['today_opportunities']), len(data['keyword_opportunities']), len(data['risk_alerts']))"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite 6 6 6
@@ -389,7 +382,7 @@ npm run build
 
 ## Analysis Center V0.1
 
-Task 6 adds `/analysis` as a local Analysis Center powered by rules plus mock fallback. It does not call OpenAI, does not connect to a real model, does not run crawlers, and does not execute platform actions.
+Task 6 adds `/analysis` as a local Analysis Center powered by rules and real business data. It does not call OpenAI, does not connect to a real model, does not run crawlers, and does not execute platform actions.
 
 Included in this page:
 
@@ -425,7 +418,7 @@ Task 6 behavior:
 - Chinese UI
 - API-first reads
 - Local SQLite support
-- Mock fallback when SQLite is missing or unavailable
+- Empty state when real data is missing or unavailable
 - Filters for platform, risk level, and suggestion priority
 - Sorting by `opportunity_score`, `risk_level`, `demand_score`, and `priority`
 - Recommendations stay at the manual-review layer and do not auto-execute
@@ -434,7 +427,6 @@ Task 6 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -448,7 +440,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/analysis')); print(data['source'], len(data['opportunity_analysis']), len(data['risk_analysis']), len(data['market_analysis']), len(data['ai_recommendations']))"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite 6 6 6 6
@@ -498,7 +490,7 @@ Task 7 behavior:
 
 - API-driven
 - Local SQLite support
-- Mock fallback support
+- Empty real-data state support
 - Chinese UI
 - Filters for status, priority, and platform
 - Sorting by `created_at`, `priority`, and `status`
@@ -509,7 +501,6 @@ Task 7 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -523,7 +514,7 @@ Optional API checks:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/approvals')); print(data['source']); print(len(data['approval_queue']), len(data['approval_history'])); print(data['approval_stats'])"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite
@@ -577,7 +568,7 @@ Task 8 behavior:
 - Chinese UI
 - API-driven reads
 - Local SQLite support
-- Mock fallback support
+- Empty real-data state support
 - Filters for `platform` and profit risk
 - Sorting by `net_profit`, `net_margin`, and `revenue`
 - No financial-system integration
@@ -587,7 +578,6 @@ Task 8 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -601,7 +591,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/profit')); print(data['source']); print(len(data['product_profit'])); print(data['profit_risk'])"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite
@@ -664,7 +654,7 @@ Task 9 behavior:
 - Chinese UI
 - API-driven reads
 - Local SQLite support
-- Mock fallback support
+- Empty real-data state support
 - Filters for `platform`, `stock_status`, and `risk_level`
 - Sorting by `days_of_stock`, `stock_qty`, `stockout_risk`, and `reorder_priority`
 - No warehouse-system integration
@@ -675,7 +665,6 @@ Task 9 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -689,7 +678,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/inventory')); print(data['source']); print(len(data['inventory_stock']), len(data['inventory_risks']), len(data['reorder_recommendations'])); print(data['snapshot'])"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite
@@ -753,7 +742,7 @@ Task 10 behavior:
 - Chinese interface
 - API-driven dashboard summary
 - Local SQLite support
-- Mock fallback when SQLite is missing or unreadable
+- Empty state when SQLite is missing or unreadable
 - Reuses existing repository logic from opportunities, analysis, approvals, profit, and inventory
 - Displays recommendations only and does not auto-execute any action
 - Keeps `/opportunities`, `/analysis`, `/profit`, `/inventory`, `/approvals`, and `/system` unchanged
@@ -762,7 +751,6 @@ Task 10 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -776,7 +764,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/dashboard-summary')); print(data['source']); print(data['dashboard_summary']['core_metrics']); print(data['dashboard_summary']['operating_status'])"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite
@@ -866,7 +854,7 @@ Task 11B behavior:
 - Chinese UI
 - API-driven reads
 - Local SQLite support
-- Mock fallback support
+- Empty real-data state support
 - Filters by priority and source module
 - Sorting by default priority order, profit impact, risk level, inventory impact, and GMV impact
 - Mobile responsive layout
@@ -879,7 +867,6 @@ Task 11B verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -893,7 +880,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/tasks')); print(data['source']); print(len(data['top_tasks']))"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite
@@ -947,7 +934,6 @@ Task 12 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -961,7 +947,7 @@ Optional API check:
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/system-health')); print(data['system_health_score']); print(len(data['api_health']), len(data['data_consistency']), data['data_source_status'])"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 7 API checks
@@ -1020,7 +1006,6 @@ Task 13 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1037,7 +1022,7 @@ python -c "import urllib.request, json; data = json.load(urllib.request.urlopen(
 python -c "import urllib.request, json; data = json.load(urllib.request.urlopen('http://127.0.0.1:3000/api/operation-logs')); print(data['source'], len(data['operation_logs']))"
 ```
 
-Expected seeded result:
+Real data verification example:
 
 ```text
 sqlite 5 5 20
@@ -1090,7 +1075,6 @@ Task 15 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1162,7 +1146,6 @@ Task 16 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1232,7 +1215,6 @@ Task 17 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1297,7 +1279,6 @@ Task 18 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1369,7 +1350,6 @@ Task 19 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1439,7 +1419,6 @@ Task 20 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1501,7 +1480,7 @@ Data priority:
 
 1. Shopee read-only API proxy when `SHOPEE_READONLY_API_BASE_URL` is configured
 2. SQLite cache
-3. Mock fallback
+3. Empty real-data state when no source is connected
 
 Optional environment variables:
 
@@ -1524,7 +1503,6 @@ Task 14 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1571,7 +1549,7 @@ Tenant rules:
 - Default tenant is `demo_tenant`.
 - APIs accept `?tenant_id=...` or the `x-tenant-id` request header.
 - Business tables receive a `tenant_id` column through the SQLite init script.
-- Mock fallback supports tenant context. Demo data remains under `demo_tenant`; non-demo tenants can return empty business collections until seeded.
+- Tenant context is supported. Tenants without real data return empty business collections until real data is imported or synchronized.
 - Subscription is display-only through `plan_type` (`free`, `pro`, `enterprise`). No Stripe, billing, or real charging logic is included.
 
 Task 21 API routes:
@@ -1585,7 +1563,6 @@ Tenant-scoped example checks:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1636,7 +1613,7 @@ Included views:
 - Must Do: high-profit opportunities, high-risk inventory, and approval blockers.
 - Risk: stockout pressure, profit decline, high-risk alerts, and system exceptions.
 - Opportunity: high-ROI products and recommended display-only actions.
-- System status: API health, DB health, mock vs SQLite ratio, and latest data update.
+- System status: API health, DB health, test-data disabled status, and latest data update.
 - Quick links: `/dashboard`, `/tasks`, `/actions`, `/inventory`, `/profit`, `/business-impact`, `/self-optimization`, `/verification`.
 
 Decision priority rule:
@@ -1658,7 +1635,6 @@ Task 22 verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run dev
 ```
 
@@ -1681,13 +1657,12 @@ Task 4 adds Vercel-ready deployment files:
 - `.vercelignore`
 - `DEPLOYMENT.md`
 
-Vercel deployment uses `DATA_SOURCE_MODE=mock` by default because local SQLite files are not a persistent production database on Vercel. Local development keeps `DATA_SOURCE_MODE=sqlite` by default and falls back to mock data if the database is missing.
+Vercel deployment should use `DATA_SOURCE_MODE=postgres` with `DATABASE_URL` configured for PostgreSQL/Supabase. Local development keeps `DATA_SOURCE_MODE=sqlite` by default and does not display test sample data unless explicitly enabled for development.
 
 Deployment verification:
 
 ```bash
 python scripts/init_db.py
-python scripts/seed_mock_data.py
 npm run build
 npm run start
 ```

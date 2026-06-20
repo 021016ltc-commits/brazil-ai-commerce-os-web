@@ -1,134 +1,101 @@
-import { StatusPill } from "@/components/StatusPill";
+import { Database, Globe2, Server, ShieldCheck } from "lucide-react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { crawl_logs, data_quality_report } from "@/data/mock";
+import { StandardPageHeader } from "@/components/PageHeader";
 import { activeDataSource, futureDataSourceNotes } from "@/lib/dataSource";
 
 function sourceLabel(source: string) {
-  if (source === "mock") return "备用数据";
-  if (source === "sqlite") return "本地数据库";
-  return source;
+  if (source === "postgresql" || source === "supabase") return "生产数据库";
+  if (source === "sqlite") return "本地真实数据库";
+  return "真实数据源未配置";
 }
 
-function tableLabel(table: string) {
-  const labels: Record<string, string> = {
-    raw_products: "原始商品数据",
-    products: "商品主数据",
-    action_queue: "执行审批池",
-  };
-  return labels[table] ?? table;
-}
-
-function checkLabel(checkName: string) {
-  const labels: Record<string, string> = {
-    platform_product_id_present: "平台商品ID完整性",
-    price_amount_valid: "价格字段有效性",
-    human_approval_required: "人工审批必需",
-  };
-  return labels[checkName] ?? checkName;
-}
+const settings = [
+  {
+    label: "数据口径",
+    value: "真实数据",
+    description: "运营页面不再展示测试样例；真实数据源不可用时显示空状态或连接提示。",
+    icon: Database,
+  },
+  {
+    label: "平台操作",
+    value: "只读优先",
+    description: "Shopee 等平台连接保持只读，不执行改价、上架、广告或补货动作。",
+    icon: ShieldCheck,
+  },
+  {
+    label: "运行环境",
+    value: process.env.SYSTEM_MODE === "production" ? "生产模式" : "本地模式",
+    description: "生产模式优先使用 PostgreSQL/Supabase；本地模式可读取本机真实数据库。",
+    icon: Server,
+  },
+];
 
 export default function SystemPage() {
   return (
     <div className="space-y-6">
+      <StandardPageHeader
+        title="系统设置"
+        description="管理语言界面、真实数据源口径与生产运行约束。"
+        meta={[
+          { label: "数据来源", value: sourceLabel(activeDataSource) },
+          { label: "测试数据", value: "已禁用" },
+          { label: "运行模式", value: process.env.SYSTEM_MODE === "production" ? "生产模式" : "本地模式" },
+        ]}
+      />
+
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
         <div className="grid gap-5 lg:grid-cols-[1fr_360px] lg:items-center">
           <div>
-            <h2 className="text-lg font-semibold text-ink">语言与界面</h2>
+            <div className="flex items-center gap-2 text-sm font-semibold text-forest">
+              <Globe2 className="h-4 w-4" aria-hidden="true" />
+              语言与界面
+            </div>
+            <h2 className="mt-2 text-lg font-semibold text-ink">界面语言设置</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              支持简体中文、Português (Brasil) 和 English。切换后菜单、系统头部、页面说明和通用操作会立即生效，并保存到当前浏览器。
+              支持简体中文、Português (Brasil) 和 English。切换后菜单、页面标题、页面说明和通用操作会立即生效，并保存到当前浏览器。
             </p>
           </div>
           <LanguageSwitcher />
         </div>
       </section>
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">系统设置</h1>
-          <p className="mt-1 text-sm text-slate-500">最近同步状态、crawl_logs 与 data_quality_report</p>
-        </div>
-        <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-sm font-medium text-slate-700">
-          数据来源：{sourceLabel(activeDataSource)}
-        </span>
-      </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        {settings.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="rounded-lg border border-line bg-white p-5 shadow-panel">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-500">{item.label}</div>
+                  <div className="mt-2 text-xl font-semibold text-ink">{item.value}</div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-slate-50 text-forest">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
+            </div>
+          );
+        })}
+      </section>
 
-      <section className="rounded-lg border border-line bg-white shadow-panel">
-        <div className="border-b border-line px-4 py-3">
-          <h2 className="text-sm font-semibold text-ink">最近同步状态</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">同步批次</th>
-                <th className="px-4 py-3">平台</th>
-                <th className="px-4 py-3">市场</th>
-                <th className="px-4 py-3">状态</th>
-                <th className="px-4 py-3">读取记录</th>
-                <th className="px-4 py-3">新增记录</th>
-                <th className="px-4 py-3">信息</th>
-              </tr>
-            </thead>
-            <tbody>
-              {crawl_logs.map((log) => (
-                <tr key={log.crawl_run_id} className="border-t border-line">
-                  <td className="px-4 py-3 font-medium text-ink">{log.crawl_run_id}</td>
-                  <td className="px-4 py-3 text-slate-700">{log.platform}</td>
-                  <td className="px-4 py-3">{log.market_code}</td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={log.status} />
-                  </td>
-                  <td className="px-4 py-3">{log.records_seen}</td>
-                  <td className="px-4 py-3">{log.records_inserted}</td>
-                  <td className="px-4 py-3 text-slate-600">{log.message}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
+        <div className="flex items-start gap-3">
+          <Database className="mt-1 h-5 w-5 text-forest" aria-hidden="true" />
+          <div>
+            <h2 className="text-lg font-semibold text-ink">真实数据源策略</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              当前系统默认禁用测试数据展示。页面和接口优先读取真实数据库或平台只读缓存；当连接不可用时，系统会保留页面可访问性，但不会用测试样例伪装成业务数据。
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-white shadow-panel">
-        <div className="border-b border-line px-4 py-3">
-          <h2 className="text-sm font-semibold text-ink">数据质量报告</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">报告ID</th>
-                <th className="px-4 py-3">数据表</th>
-                <th className="px-4 py-3">检查项</th>
-                <th className="px-4 py-3">严重程度</th>
-                <th className="px-4 py-3">质量状态</th>
-                <th className="px-4 py-3">详情</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data_quality_report.map((report) => (
-                <tr key={report.report_id} className="border-t border-line">
-                  <td className="px-4 py-3 font-medium text-ink">{report.report_id}</td>
-                  <td className="px-4 py-3">{tableLabel(report.source_table)}</td>
-                  <td className="px-4 py-3 text-slate-700">{checkLabel(report.check_name)}</td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={report.severity} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={report.quality_status} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{report.details}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
-        <h2 className="text-sm font-semibold text-ink">未来数据接入预留</h2>
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
+      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
+        <h2 className="text-lg font-semibold text-ink">后续数据接入预留</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
           {futureDataSourceNotes.map((note) => (
-            <div key={note} className="rounded-md border border-line bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <div key={note} className="rounded-md border border-line bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
               {note}
             </div>
           ))}

@@ -4,6 +4,7 @@ import {
   tenantUserMock,
   workspaceMock,
 } from "@/data/tenantsMock";
+import { emptyTenantsResponse } from "@/data/emptyResponses";
 import { currentTenantId, DEFAULT_TENANT_ID } from "@/lib/tenantContext";
 import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
@@ -150,7 +151,7 @@ export async function getTenantsResponse(): Promise<TenantsApiResponse> {
       };
     });
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Tenants read failed.");
+    if (!isMockDataAllowed()) return emptyTenantsResponse;
     return mockTenantsResponse();
   }
 }
@@ -181,7 +182,13 @@ export async function getWorkspacesResponse(): Promise<WorkspacesApiResponse> {
       };
     });
   } catch (error) {
-    if (!isMockDataAllowed()) throw error instanceof Error ? error : new Error("Workspaces read failed.");
+    if (!isMockDataAllowed()) {
+      return {
+        source: "sqlite",
+        tenant_id: currentTenantId(),
+        workspaces: [],
+      };
+    }
     return mockWorkspacesResponse();
   }
 }
@@ -205,7 +212,7 @@ export async function createTenant(params: {
       source: "mock",
       tenant_id: tenantId,
       tenant,
-      message: "备用数据模式：仅创建本地工作空间预览。",
+      message: "测试数据已禁用，未创建工作空间预览。",
     };
   }
 
@@ -257,7 +264,7 @@ export async function createWorkspace(params: {
       source: "mock",
       tenant_id: tenantId,
       workspace,
-      message: "备用数据模式：运营空间预览记录仅在本地生成。",
+      message: "测试数据已禁用，未生成运营空间预览记录。",
     };
   }
 

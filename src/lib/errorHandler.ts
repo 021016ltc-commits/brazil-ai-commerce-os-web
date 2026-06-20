@@ -31,13 +31,13 @@ export async function tenantServiceJson<T extends object>(
     return NextResponse.json(
       {
         tenant_id: tenantId,
-        source: isProductionMode() ? "sqlite" : "mock",
+        source: "sqlite",
         fallback: true,
         production_safe_fallback: isProductionMode(),
-        error: "API safe fallback response.",
+        error: isProductionMode() ? "Real data source unavailable." : "API fallback response.",
         detail: errorMessage(error),
       } satisfies ApiPayload,
-      { status: 200 },
+      { status: isProductionMode() ? 503 : 200 },
     );
   }
 }
@@ -58,7 +58,7 @@ export async function mutationServiceJson<T extends object>(
     return NextResponse.json(
       {
         tenant_id: tenantId,
-        source: isProductionMode() ? "sqlite" : "mock",
+        source: "sqlite",
         fallback: true,
         production_safe_fallback: isProductionMode(),
         error: errorMessage(error),

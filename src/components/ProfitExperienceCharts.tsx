@@ -2,17 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BarChartCard, DonutChartCard, LineChartCard } from "@/components/Charts";
-import { buildCostStructure, buildProfitRisk } from "@/lib/profit";
-import { productProfitMock, profitSnapshotMock } from "@/data/profitMock";
+import { emptyProfitResponse } from "@/data/emptyResponses";
 import type { ProfitApiResponse } from "@/types";
 
-const fallbackProfit: ProfitApiResponse = {
-  source: "mock",
-  snapshot: profitSnapshotMock,
-  cost_structure: buildCostStructure(profitSnapshotMock),
-  profit_risk: buildProfitRisk(productProfitMock),
-  product_profit: productProfitMock,
-};
+const fallbackProfit: ProfitApiResponse = emptyProfitResponse;
 
 export function ProfitExperienceCharts() {
   const [data, setData] = useState<ProfitApiResponse>(fallbackProfit);

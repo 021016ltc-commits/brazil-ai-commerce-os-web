@@ -11,12 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { InventoryExperienceCharts } from "@/components/InventoryExperienceCharts";
-import {
-  inventoryRiskMock,
-  inventorySnapshotMock,
-  inventoryStockMock,
-  reorderRecommendationMock,
-} from "@/data/inventoryMock";
+import { emptyInventoryResponse } from "@/data/emptyResponses";
 import { formatBrl } from "@/lib/format";
 import { riskTypeLabel } from "@/locales/zh-CN";
 import type {
@@ -33,16 +28,10 @@ type StockStatusFilter = "all" | StockStatus;
 type RiskFilter = "all" | RiskLevel;
 type SortKey = "days_of_stock" | "stock_qty" | "stockout_risk" | "reorder_priority";
 
-const fallbackInventory: InventoryApiResponse = {
-  source: "mock",
-  snapshot: inventorySnapshotMock,
-  inventory_stock: inventoryStockMock,
-  inventory_risks: inventoryRiskMock,
-  reorder_recommendations: reorderRecommendationMock,
-};
+const fallbackInventory: InventoryApiResponse = emptyInventoryResponse;
 
 function sourceLabel(source: InventoryApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function formatNumber(value: number, digits = 0) {
@@ -264,7 +253,7 @@ export default function InventoryPage() {
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">库存中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把库存总览、SKU监控、库存风险和补货建议放到同一个面板里，帮助运营判断今天先看有没有货、会不会断货、会不会积压，以及库存是否已经开始拖利润和现金流。它优先读取本地数据，不可用时自动回退到备用数据。
+                这个页面把库存总览、SKU监控、库存风险和补货建议放到同一个面板里，帮助运营判断今天先看有没有货、会不会断货、会不会积压，以及库存是否已经开始拖利润和现金流。它只展示真实业务数据，真实数据源不可用时显示空状态与连接提示。
               </p>
             </div>
           </div>

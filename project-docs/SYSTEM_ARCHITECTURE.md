@@ -4,7 +4,7 @@ Last updated: 2026-06-17
 
 ## 1. Current System Shape
 
-The current system is a local-first Next.js application with SQLite-backed API routes and mock fallback.
+The current system is a local-first Next.js application with SQLite/PostgreSQL-backed API routes and empty-state fallback when real data is unavailable.
 
 It is not connected to real platform APIs, real crawler jobs, real AI models, or real execution systems.
 
@@ -41,7 +41,7 @@ flowchart TD
   InventoryAPI --> Repository
 
   Repository --> SQLite["Local SQLite / data/brazil_ai_commerce_os.db"]
-  Repository --> MockFallback["Mock Fallback / src/data"]
+  Repository --> EmptyState["Empty real-data response shapes / src/data/emptyResponses.ts"]
 
   Connectors["Future Connectors"] -. read-only first .-> SQLite
   Connectors -. "Shopee, Mercado Livre, Amazon BR, TikTok Shop BR, Temu, AliExpress, Independent Store" .-> SQLite
@@ -54,11 +54,10 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  Seed["scripts/seed_mock_data.py"] --> SQLite["SQLite Tables"]
   Init["scripts/init_db.py"] --> SQLite
 
   SQLite --> Repo["dbRepository.ts"]
-  Mock["src/data mock files"] --> Repo
+  EmptyState["src/data/emptyResponses.ts"] --> UI
 
   Repo --> Products["/api/products"]
   Repo --> OppAPI["/api/opportunities"]
@@ -137,13 +136,13 @@ SQLite mode:
 
 - `DATA_SOURCE_MODE=sqlite`
 - API attempts to read `SQLITE_DB_PATH`.
-- If SQLite is missing or fails, repository returns mock fallback.
+- If SQLite is missing or fails, UI routes show empty states or connection messages.
 
-Mock mode:
+Test data mode:
 
-- `DATA_SOURCE_MODE=mock`
-- API returns mock data directly.
-- Recommended for Vercel demo deployment.
+- Disabled by default.
+- Production and normal local operation do not display sample business data.
+- Real data should come from SQLite locally or PostgreSQL/Supabase in production.
 
 ## 6. Deployment Architecture
 
@@ -153,9 +152,9 @@ flowchart TD
   Local --> LocalAPI["Next.js API routes"]
   LocalAPI --> LocalUI["Local UI"]
 
-  Vercel["Vercel Deployment"] --> VercelEnv["DATA_SOURCE_MODE=mock"]
-  VercelEnv --> MockData["Mock fallback data"]
-  MockData --> VercelUI["Public demo UI"]
+  Vercel["Vercel Deployment"] --> VercelEnv["DATA_SOURCE_MODE=postgres"]
+  VercelEnv --> Postgres["PostgreSQL / Supabase"]
+  Postgres --> VercelUI["Public production UI"]
 ```
 
 ## 7. Execution Boundary
@@ -165,7 +164,7 @@ The current system never executes real platform actions.
 Allowed:
 
 - Read local SQLite.
-- Read mock fallback.
+- Show empty states when real data is unavailable.
 - Display recommendations.
 - Update local approval status.
 - Write local approval history.

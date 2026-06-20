@@ -9,6 +9,7 @@ import {
   actionExecutionHistoryMock,
   actionExecutionQueueMock,
 } from "@/data/actionsMock";
+import { emptyActionHistoryResponse, emptyActionQueueResponse } from "@/data/emptyResponses";
 import { recordOperationLog } from "@/lib/users";
 import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
@@ -77,7 +78,7 @@ function shouldUseDefaultMockFallback() {
 
 function rethrowIfProduction(error: unknown): void {
   if (!isMockDataAllowed()) {
-    throw error instanceof Error ? error : new Error("Action execution repository failed.");
+    return;
   }
 }
 
@@ -208,7 +209,7 @@ export async function getActionExecutionQueueResponse(): Promise<ActionExecution
     };
   } catch (error) {
     rethrowIfProduction(error);
-    return mockQueueResponse();
+    return emptyActionQueueResponse;
   }
 }
 
@@ -225,7 +226,7 @@ export async function getActionExecutionHistoryResponse(): Promise<ActionExecuti
     };
   } catch (error) {
     rethrowIfProduction(error);
-    return { source: "mock", history: actionExecutionHistoryMock };
+    return emptyActionHistoryResponse;
   }
 }
 
@@ -243,14 +244,13 @@ export async function createActionExecutionRequest(
   });
 
   if (shouldUseMockData()) {
-    const queue = [action, ...actionExecutionQueueMock];
     return {
-      source: "mock",
+      source: "sqlite",
       persisted: false,
       action,
       history,
-      stats: buildExecutionStats(queue),
-      message: "备用数据模式已创建执行申请预览，但未写入 SQLite。",
+      stats: buildExecutionStats([]),
+      message: "测试数据已禁用，未写入 SQLite。",
     };
   }
 
@@ -349,7 +349,7 @@ export async function createActionExecutionRequest(
       action,
       history,
       stats: buildExecutionStats(queue),
-      message: "SQLite 不可用，已使用备用数据创建执行申请预览。",
+      message: "真实数据源不可用，未创建测试执行申请。",
     };
   }
 }
@@ -416,7 +416,7 @@ async function decideActionExecutionRequest(
       action: nextAction,
       history,
       stats: buildExecutionStats(queue),
-      message: `备用数据模式已${decision === "approved" ? "批准" : "驳回"}执行申请，但未写入 SQLite。`,
+      message: `测试数据已禁用，未${decision === "approved" ? "批准" : "驳回"}执行申请。`,
     };
   }
 

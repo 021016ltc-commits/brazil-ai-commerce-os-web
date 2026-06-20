@@ -12,7 +12,7 @@ import {
   Gauge,
   Server,
 } from "lucide-react";
-import { verificationMock } from "@/data/verificationMock";
+import { emptyVerificationResponse } from "@/data/emptyResponses";
 import type {
   VerificationApiHealthItem,
   VerificationModuleCheck,
@@ -31,8 +31,8 @@ function formatDateTime(value: string) {
 }
 
 function sourceLabel(source: VerificationModuleCheck["data_source"]) {
-  if (source === "sqlite") return "本地数据";
-  if (source === "mock") return "备用数据";
+  if (source === "sqlite") return "真实数据";
+  if (source === "mock") return "测试数据已禁用";
   if (source === "shopee_api") return "Shopee只读接口";
   return "未知";
 }
@@ -175,7 +175,7 @@ function ApiRow({ item }: { item: VerificationApiHealthItem }) {
 }
 
 export default function VerificationPage() {
-  const [data, setData] = useState<VerificationStatusApiResponse>(verificationMock);
+  const [data, setData] = useState<VerificationStatusApiResponse>(emptyVerificationResponse);
 
   useEffect(() => {
     let active = true;
@@ -186,7 +186,7 @@ export default function VerificationPage() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(verificationMock);
+        if (active) setData(emptyVerificationResponse);
       });
 
     return () => {
@@ -245,7 +245,7 @@ export default function VerificationPage() {
                   <StatusBadge status={data.runtime_summary.system_available} />
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-500">
-                  生成时间：{formatDateTime(data.generated_at)} / 数据源：{data.source === "sqlite" ? "本地数据" : "备用数据"}
+                  生成时间：{formatDateTime(data.generated_at)} / 数据源：{data.source === "sqlite" ? "真实数据" : "测试数据已禁用"}
                 </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-forest">

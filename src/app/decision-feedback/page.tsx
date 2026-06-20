@@ -15,10 +15,11 @@ import { MetricCard } from "@/components/MetricCard";
 import { DecisionFeedbackExperienceCharts } from "@/components/ModuleExperienceCharts";
 import { StatusPill } from "@/components/StatusPill";
 import {
-  decisionHistoryMock,
-  decisionLearningMock,
-  decisionMetricsMock,
-} from "@/data/decisionFeedbackMock";
+  emptyDecisionHistoryResponse,
+  emptyDecisionLearning,
+  emptyDecisionMetrics,
+  emptyDecisionMetricsResponse,
+} from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { decisionUserActionLabel, feedbackSourceLabel, statusLabel } from "@/locales/zh-CN";
 import type {
@@ -31,18 +32,8 @@ import type {
   MetricTone,
 } from "@/types";
 
-const fallbackHistory: DecisionHistoryApiResponse = {
-  source: "mock",
-  history: decisionHistoryMock,
-};
-
-const fallbackMetrics: DecisionMetricsApiResponse = {
-  source: "mock",
-  generated_at: new Date().toISOString(),
-  metrics: decisionMetricsMock,
-  learning: decisionLearningMock,
-  history_count: decisionHistoryMock.length,
-};
+const fallbackHistory: DecisionHistoryApiResponse = emptyDecisionHistoryResponse;
+const fallbackMetrics: DecisionMetricsApiResponse = emptyDecisionMetricsResponse;
 
 type FeedbackFormState = {
   product_id: string;
@@ -59,21 +50,21 @@ type FeedbackFormState = {
 };
 
 const initialForm: FeedbackFormState = {
-  product_id: "ITEM-NEW",
+  product_id: "",
   product_uid: "",
-  platform: "Shopee",
+  platform: "",
   decisionState: "RECOMMEND",
-  user_action: "buy",
+  user_action: "observe",
   source: "manual",
-  actual_sales: "36",
-  actual_profit: "860",
-  roi_real: "1.28",
-  stock_change: "-36",
-  conversion_rate: "0.032",
+  actual_sales: "",
+  actual_profit: "",
+  roi_real: "",
+  stock_change: "",
+  conversion_rate: "",
 };
 
 function sourceLabel(source: DecisionHistoryApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function formatDateTime(value: string) {
@@ -167,10 +158,10 @@ export default function DecisionFeedbackPage() {
       await refreshData();
     } catch {
       setSubmitResult({
-        source: "mock",
+        source: "sqlite",
         persisted: false,
         feedback: {
-          decision_id: "mock_failed_feedback",
+          decision_id: "feedback_not_persisted",
           product_id: form.product_id,
           decisionState: form.decisionState,
           user_action: form.user_action,
@@ -178,9 +169,9 @@ export default function DecisionFeedbackPage() {
           source: form.source,
           created_at: new Date().toISOString(),
         },
-        metrics: decisionMetricsMock,
-        learning: decisionLearningMock,
-        message: "反馈提交失败，页面已保持备用数据可用。",
+        metrics: emptyDecisionMetrics,
+        learning: emptyDecisionLearning,
+        message: "反馈提交失败，未写入测试数据。请检查真实数据源连接。",
       });
     } finally {
       setSubmitting(false);
@@ -277,7 +268,7 @@ export default function DecisionFeedbackPage() {
               </div>
               <h2 className="mt-2 text-xl font-semibold text-ink">记录一次人工决策和业务结果</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                这个表单只写入本地数据或备用数据，不会连接平台，不会下单，不会改价。
+                这个表单只写入真实本地数据，不会连接平台，不会下单，不会改价。
               </p>
             </div>
             <ClipboardList className="h-5 w-5 text-forest" aria-hidden="true" />

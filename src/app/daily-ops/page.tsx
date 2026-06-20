@@ -16,7 +16,7 @@ import {
   Target,
   TrendingUp,
 } from "lucide-react";
-import { dailyOpsMock } from "@/data/dailyOpsMock";
+import { emptyDailyOpsResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { actionTypeLabelZh, riskTypeLabel, sourceModuleLabel, statusLabel, suggestedByLabel } from "@/locales/zh-CN";
 import type {
@@ -27,7 +27,7 @@ import type {
 } from "@/types";
 
 function sourceLabel(source: DailyOpsApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function riskLabel(level: RiskLevel) {
@@ -190,7 +190,7 @@ function OpportunityCard({ item }: { item: DailyOpsOpportunityItem }) {
 }
 
 export default function DailyOpsPage() {
-  const [data, setData] = useState<DailyOpsApiResponse>(dailyOpsMock);
+  const [data, setData] = useState<DailyOpsApiResponse>(emptyDailyOpsResponse);
 
   useEffect(() => {
     let active = true;
@@ -201,7 +201,7 @@ export default function DailyOpsPage() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(dailyOpsMock);
+        if (active) setData(emptyDailyOpsResponse);
       });
 
     return () => {

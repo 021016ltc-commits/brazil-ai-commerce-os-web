@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Boxes, Database, PackageSearch, RefreshCw, ShieldCheck, ShoppingBag } from "lucide-react";
 import { ShopeeExperienceCharts } from "@/components/ModuleExperienceCharts";
 import {
-  shopeeInventoryMock,
-  shopeeOrdersMock,
-  shopeeProductsMock,
-} from "@/connectors/shopee/mock";
+  emptyShopeeInventoryResponse,
+  emptyShopeeOrdersResponse,
+  emptyShopeeProductsResponse,
+} from "@/data/emptyResponses";
 import { shopeeOrderStatusLabel } from "@/locales/zh-CN";
 import type {
   ShopeeInventoryItem,
@@ -17,26 +17,9 @@ import type {
   ShopeeSyncResult,
 } from "@/types";
 
-const fallbackOrders: ShopeeReadOnlyApiResponse<ShopeeOrder> = {
-  source: "mock",
-  data: shopeeOrdersMock,
-  synced_at: null,
-  readonly: true,
-};
-
-const fallbackProducts: ShopeeReadOnlyApiResponse<ShopeeProduct> = {
-  source: "mock",
-  data: shopeeProductsMock,
-  synced_at: null,
-  readonly: true,
-};
-
-const fallbackInventory: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = {
-  source: "mock",
-  data: shopeeInventoryMock,
-  synced_at: null,
-  readonly: true,
-};
+const fallbackOrders: ShopeeReadOnlyApiResponse<ShopeeOrder> = emptyShopeeOrdersResponse;
+const fallbackProducts: ShopeeReadOnlyApiResponse<ShopeeProduct> = emptyShopeeProductsResponse;
+const fallbackInventory: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = emptyShopeeInventoryResponse;
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -62,8 +45,8 @@ function formatDateTime(value: string | null) {
 
 function sourceLabel(source: ShopeeReadOnlyApiResponse<unknown>["source"]) {
   if (source === "shopee_api") return "Shopee只读接口";
-  if (source === "sqlite") return "本地缓存";
-  return "备用数据";
+  if (source === "sqlite") return "真实缓存";
+  return "测试数据已禁用";
 }
 
 function SectionHeader({
@@ -217,7 +200,7 @@ export default function ShopeePage() {
                   最近同步：{formatDateTime(latestSync)}
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  点击按钮后只读取已配置的 Shopee只读接口或备用数据，并写入本地缓存。
+                  点击按钮后只读取已配置的 Shopee 只读接口或真实本地缓存，并写入本地缓存。
                 </p>
               </div>
               <ShieldCheck className="h-5 w-5 text-forest" aria-hidden="true" />

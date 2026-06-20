@@ -12,7 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BusinessImpactExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { businessImpactMock } from "@/data/businessImpactMock";
+import { emptyBusinessImpactResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { actionTypeLabelZh, statusLabel } from "@/locales/zh-CN";
 import type { BusinessImpactActionItem, BusinessImpactApiResponse, Platform } from "@/types";
@@ -29,7 +29,7 @@ const sortLabels: Record<SortKey, string> = {
 };
 
 function sourceLabel(source: BusinessImpactApiResponse["source"]) {
-  return source === "sqlite" ? "本地数据" : "备用数据";
+  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
 function impactSourceLabel(source: BusinessImpactActionItem["source"]) {
@@ -102,7 +102,7 @@ function SummaryCard({
 }
 
 export default function BusinessImpactPage() {
-  const [data, setData] = useState<BusinessImpactApiResponse>(businessImpactMock);
+  const [data, setData] = useState<BusinessImpactApiResponse>(emptyBusinessImpactResponse);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [actionTypeFilter, setActionTypeFilter] = useState("all");
@@ -117,7 +117,7 @@ export default function BusinessImpactPage() {
         if (active) setData(payload);
       })
       .catch(() => {
-        if (active) setData(businessImpactMock);
+        if (active) setData(emptyBusinessImpactResponse);
       });
 
     return () => {
