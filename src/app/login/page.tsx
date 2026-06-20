@@ -23,19 +23,31 @@ export default function LoginPage() {
   const router = useRouter();
   const [data, setData] = useState<UsersApiResponse>(fallbackUsers);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     let active = true;
+    setIsLoading(true);
+    setLoadError("");
 
     fetch("/api/users", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((payload: UsersApiResponse) => {
         if (!active) return;
         setData(payload);
-        setSelectedUserId(payload.users[0]?.user_id ?? "");
+        setSelectedUserId("");
       })
       .catch(() => {
-        if (active) setData(fallbackUsers);
+        if (!active) return;
+        setData(fallbackUsers);
+        setLoadError("用户列表加载失败，请检查初始化数据或联系管理员。");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
       });
 
     return () => {
@@ -43,46 +55,52 @@ export default function LoginPage() {
     };
   }, []);
 
-  const selectedUser = useMemo<UserItem | undefined>(
-    () => data.users.find((user) => user.user_id === selectedUserId) ?? data.users[0],
-    [data.users, selectedUserId],
+  const activeUsers = useMemo(
+    () => data.users.filter((user) => user.status === "active"),
+    [data.users],
   );
+  const selectedUser = useMemo<UserItem | undefined>(
+    () => activeUsers.find((user) => user.user_id === selectedUserId),
+    [activeUsers, selectedUserId],
+  );
+  const internalAdminReady = activeUsers.some(
+    (user) => user.display_name === "楼天城" && user.roles.includes("admin"),
+  );
+  const emptyMessage = !isLoading && activeUsers.length === 0
+    ? "未找到可用用户，请联系管理员或检查初始化数据"
+    : "";
+  const canLogin = Boolean(selectedUser && password.trim() && !isLoading && !isSubmitting);
 
-  function handleLogin() {
-    if (!selectedUser) return;
+  async function handleLogin() {
+    if (!canLogin || !selectedUser) return;
+    setIsSubmitting(true);
+    setLoginError("");
 
-    const loggedInUser: UserItem = {
-      ...selectedUser,
-      last_login_at: new Date().toISOString(),
-    };
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: selectedUser.user_id,
+          password,
+        }),
+      });
 
-    storeLocalUser(loggedInUser);
+      const payload = (await response.json().catch(() => null)) as
+        | { user?: UserItem; redirect_to?: string; error?: string }
+        | null;
 
-    void fetch("/api/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: loggedInUser.user_id,
-        last_login_at: loggedInUser.last_login_at,
-        actor_user_id: loggedInUser.user_id,
-        actor_email: loggedInUser.email,
-      }),
-    }).catch(() => undefined);
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error ?? "账号或密码不正确。");
+      }
 
-    void fetch("/api/operation-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action_type: "login",
-        actor_user_id: loggedInUser.user_id,
-        actor_email: loggedInUser.email,
-        target_type: "session",
-        target_id: "local_session",
-        summary: `${loggedInUser.display_name} 登录本地系统。`,
-      }),
-    }).catch(() => undefined);
-
-    router.push("/dashboard");
+      storeLocalUser(payload.user);
+      router.push(payload.redirect_to ?? "/dashboard");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "账号或密码不正确。");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -99,14 +117,42 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-4">
+          {isLoading ? (
+            <div className="rounded-lg border border-line bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              正在加载可用用户...
+            </div>
+          ) : null}
+          {internalAdminReady ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-forest">
+              已准备内部管理员账号
+            </div>
+          ) : null}
+          {loadError ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {loadError}
+            </div>
+          ) : null}
+          {emptyMessage ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {emptyMessage}
+            </div>
+          ) : null}
+          {loginError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {loginError}
+            </div>
+          ) : null}
+
           <label className="block">
             <span className="text-sm font-medium text-slate-700">本地用户</span>
             <select
-              value={selectedUser?.user_id ?? selectedUserId}
+              value={selectedUserId}
               onChange={(event) => setSelectedUserId(event.target.value)}
+              disabled={isLoading || activeUsers.length === 0}
               className="mt-1 h-11 w-full rounded-md border border-line bg-white px-3 outline-none focus:border-forest"
             >
-              {data.users.map((user) => (
+              <option value="">请选择用户</option>
+              {activeUsers.map((user) => (
                 <option key={user.user_id} value={user.user_id}>
                   {user.display_name} / {user.email} / {user.roles.map((role) => roleLabels[role]).join("、")}
                 </option>
@@ -115,11 +161,14 @@ export default function LoginPage() {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">本地演示密码</span>
+            <span className="text-sm font-medium text-slate-700">登录密码</span>
             <input
               className="mt-1 h-11 w-full rounded-md border border-line px-3 outline-none focus:border-forest"
-              defaultValue="local-demo"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="请输入密码"
               type="password"
+              autoComplete="current-password"
             />
           </label>
 
@@ -154,11 +203,12 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={handleLogin}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-forest px-4 text-sm font-semibold text-white hover:bg-emerald-800"
+            onClick={() => void handleLogin()}
+            disabled={!canLogin}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-forest px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <LogIn className="h-4 w-4" aria-hidden="true" />
-            进入运营总览
+            {isSubmitting ? "登录中" : "进入运营总览"}
           </button>
         </div>
       </section>

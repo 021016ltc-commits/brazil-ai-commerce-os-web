@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "brazil_ai_commerce_os.db"
+DEFAULT_TENANT_ID = "demo_tenant"
+DEFAULT_ADMIN_USER_ID = "user_admin_001"
+DEFAULT_ADMIN_ACCOUNT = "楼天城"
+DEFAULT_ADMIN_PASSWORD_SALT = "kWz9jaoFAO9WYkpkQ4xjsQ=="
+DEFAULT_ADMIN_PASSWORD_HASH = "g+D8BZ+QLxsgO3EJsdIIi0FchxyA5pvk5v/gLYDMl/g="
+DEFAULT_ADMIN_PASSWORD_ALGORITHM = "pbkdf2_sha256_100000"
 
 
 SCHEMA_STATEMENTS = [
@@ -255,7 +263,10 @@ SCHEMA_STATEMENTS = [
         default_role TEXT,
         last_login_at DATETIME,
         created_at DATETIME,
-        updated_at DATETIME
+        updated_at DATETIME,
+        password_hash TEXT,
+        password_salt TEXT,
+        password_algorithm TEXT
     );
     """,
     """
@@ -571,6 +582,68 @@ DECISION_BUSINESS_OUTCOME_COLUMNS = {
     "is_failed": "BOOLEAN",
 }
 
+USER_SECURITY_COLUMNS = {
+    "password_hash": "TEXT",
+    "password_salt": "TEXT",
+    "password_algorithm": "TEXT",
+}
+
+SYSTEM_PERMISSIONS = [
+    ("perm_dashboard_view", "dashboard:view", "dashboard", "view", "查看运营总览。"),
+    ("perm_command_center_view", "command_center:view", "command_center", "view", "查看运营指挥中心。"),
+    ("perm_daily_ops_view", "daily_ops:view", "daily_ops", "view", "查看每日运营。"),
+    ("perm_tasks_view", "tasks:view", "tasks", "view", "查看今日任务。"),
+    ("perm_opportunities_view", "opportunities:view", "opportunities", "view", "查看机会中心。"),
+    ("perm_analysis_view", "analysis:view", "analysis", "view", "查看数据分析。"),
+    ("perm_profit_view", "profit:view", "profit", "view", "查看利润中心。"),
+    ("perm_inventory_view", "inventory:view", "inventory", "view", "查看库存中心。"),
+    ("perm_approvals_view", "approvals:view", "approvals", "view", "查看审批中心。"),
+    ("perm_approvals_approve", "approvals:approve", "approvals", "approve", "执行本地审批状态流转。"),
+    ("perm_actions_view", "actions:view", "actions", "view", "查看执行中心。"),
+    ("perm_actions_approve", "actions:approve", "actions", "approve", "审批本地受控执行申请。"),
+    ("perm_shopee_view", "shopee:view", "shopee", "view", "查看 Shopee 店铺。"),
+    ("perm_decision_feedback_view", "decision_feedback:view", "decision_feedback", "view", "查看决策复盘。"),
+    ("perm_business_impact_view", "business_impact:view", "business_impact", "view", "查看经营结果分析。"),
+    ("perm_self_optimization_view", "self_optimization:view", "self_optimization", "view", "查看规则优化。"),
+    ("perm_verification_view", "verification:view", "verification", "view", "查看系统验收。"),
+    ("perm_users_view", "users:view", "users", "view", "查看用户和权限。"),
+    ("perm_users_manage", "users:manage", "users", "manage", "创建和修改本地用户。"),
+    ("perm_tenants_view", "tenants:view", "tenants", "view", "查看工作空间。"),
+    ("perm_system_view", "system:view", "system", "view", "查看系统设置。"),
+    ("perm_system_health_view", "system_health:view", "system_health", "view", "查看系统健康。"),
+]
+
+ROLE_PERMISSION_KEYS = {
+    "admin": [permission[1] for permission in SYSTEM_PERMISSIONS],
+    "operator": [
+        "dashboard:view",
+        "command_center:view",
+        "daily_ops:view",
+        "tasks:view",
+        "opportunities:view",
+        "analysis:view",
+        "approvals:view",
+        "approvals:approve",
+        "actions:view",
+        "shopee:view",
+        "decision_feedback:view",
+        "business_impact:view",
+        "self_optimization:view",
+        "verification:view",
+    ],
+    "buyer": ["dashboard:view", "command_center:view", "daily_ops:view", "tasks:view", "inventory:view"],
+    "finance": ["dashboard:view", "command_center:view", "profit:view"],
+    "viewer": [permission[1] for permission in SYSTEM_PERMISSIONS if permission[3] == "view"],
+}
+
+ROLE_DESCRIPTIONS = {
+    "admin": "系统管理员，拥有全部查看、管理和审批权限。",
+    "operator": "运营角色，可处理运营总览、今日任务、机会中心、数据分析和审批中心。",
+    "buyer": "采购角色，可查看运营总览、今日任务和库存中心。",
+    "finance": "财务角色，可查看运营总览和利润中心。",
+    "viewer": "只读角色，可查看页面但不能管理用户或执行审批。",
+}
+
 TENANT_SCOPED_TABLES = [
     "sellers",
     "products",
@@ -613,6 +686,165 @@ def ensure_columns(conn: sqlite3.Connection, table_name: str, columns: dict[str,
             conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def seed_system_identity(conn: sqlite3.Connection) -> None:
+    created_at = utc_now()
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO tenants (tenant_id, name, plan_type, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (DEFAULT_TENANT_ID, "Brazil Internal Workspace", "free", created_at),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO workspaces (workspace_id, tenant_id, name, shop_count, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        ("workspace_demo_default", DEFAULT_TENANT_ID, "默认工作空间", 1, created_at),
+    )
+
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO permissions (
+            permission_id, permission_key, resource, action, description, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [(*permission, created_at) for permission in SYSTEM_PERMISSIONS],
+    )
+
+    for role_id, permission_keys in ROLE_PERMISSION_KEYS.items():
+        conn.execute(
+            """
+            INSERT INTO roles (role_id, role_name, description, is_system, permission_keys_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(role_id) DO UPDATE SET
+                permission_keys_json = excluded.permission_keys_json,
+                description = excluded.description,
+                is_system = excluded.is_system
+            """,
+            (
+                role_id,
+                role_id,
+                ROLE_DESCRIPTIONS[role_id],
+                1,
+                json.dumps(permission_keys, ensure_ascii=False),
+                created_at,
+            ),
+        )
+
+    users_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if users_count == 0:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO users (
+                user_id, email, display_name, status, default_role,
+                last_login_at, created_at, updated_at,
+                password_hash, password_salt, password_algorithm
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                DEFAULT_ADMIN_USER_ID,
+                DEFAULT_ADMIN_ACCOUNT,
+                DEFAULT_ADMIN_ACCOUNT,
+                "active",
+                "admin",
+                None,
+                created_at,
+                created_at,
+                DEFAULT_ADMIN_PASSWORD_HASH,
+                DEFAULT_ADMIN_PASSWORD_SALT,
+                DEFAULT_ADMIN_PASSWORD_ALGORITHM,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_roles (user_id, role_id, assigned_at, assigned_by)
+            VALUES (?, ?, ?, ?)
+            """,
+            (DEFAULT_ADMIN_USER_ID, "admin", created_at, "system"),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO tenant_users (tenant_id, user_id, role)
+            VALUES (?, ?, ?)
+            """,
+            (DEFAULT_TENANT_ID, DEFAULT_ADMIN_USER_ID, "owner"),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO operation_logs (
+                log_id, action_type, actor_user_id, actor_email, target_type,
+                target_id, summary, status, created_at, metadata_json, tenant_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "oplog_internal_admin_seeded",
+                "admin_seeded",
+                "system",
+                "system@local",
+                "users",
+                DEFAULT_ADMIN_USER_ID,
+                "内部管理员账号已准备。",
+                "success",
+                created_at,
+                json.dumps({"mode": "internal_admin_bootstrap"}, ensure_ascii=False),
+                DEFAULT_TENANT_ID,
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE users
+               SET password_hash = COALESCE(password_hash, ?),
+                   password_salt = COALESCE(password_salt, ?),
+                   password_algorithm = COALESCE(password_algorithm, ?),
+                   status = CASE WHEN status IS NULL THEN 'active' ELSE status END,
+                   default_role = CASE WHEN default_role IS NULL THEN 'admin' ELSE default_role END,
+                   updated_at = COALESCE(updated_at, ?)
+             WHERE user_id = ?
+                OR email = ?
+                OR display_name = ?
+            """,
+            (
+                DEFAULT_ADMIN_PASSWORD_HASH,
+                DEFAULT_ADMIN_PASSWORD_SALT,
+                DEFAULT_ADMIN_PASSWORD_ALGORITHM,
+                created_at,
+                DEFAULT_ADMIN_USER_ID,
+                DEFAULT_ADMIN_ACCOUNT,
+                DEFAULT_ADMIN_ACCOUNT,
+            ),
+        )
+        admin_exists = conn.execute(
+            "SELECT user_id FROM users WHERE user_id = ? OR email = ? OR display_name = ? LIMIT 1",
+            (DEFAULT_ADMIN_USER_ID, DEFAULT_ADMIN_ACCOUNT, DEFAULT_ADMIN_ACCOUNT),
+        ).fetchone()
+        if admin_exists:
+            admin_user_id = admin_exists[0]
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_roles (user_id, role_id, assigned_at, assigned_by)
+                VALUES (?, ?, ?, ?)
+                """,
+                (admin_user_id, "admin", created_at, "system"),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO tenant_users (tenant_id, user_id, role)
+                VALUES (?, ?, ?)
+                """,
+                (DEFAULT_TENANT_ID, admin_user_id, "owner"),
+            )
+
+
 def init_database(db_path: Path) -> Path:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -622,8 +854,10 @@ def init_database(db_path: Path) -> Path:
             conn.execute(statement)
         ensure_columns(conn, "action_queue", ACTION_QUEUE_COLUMNS)
         ensure_columns(conn, "decision_business_outcomes", DECISION_BUSINESS_OUTCOME_COLUMNS)
+        ensure_columns(conn, "users", USER_SECURITY_COLUMNS)
         for table_name in TENANT_SCOPED_TABLES:
             ensure_columns(conn, table_name, {"tenant_id": "TEXT NOT NULL DEFAULT 'demo_tenant'"})
+        seed_system_identity(conn)
         conn.commit()
 
     return db_path

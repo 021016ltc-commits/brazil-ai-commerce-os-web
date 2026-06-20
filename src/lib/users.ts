@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { pbkdf2Sync, randomUUID, timingSafeEqual } from "node:crypto";
+import type { DatabaseSync } from "node:sqlite";
 import {
   operationLogMock,
   permissionMock,
@@ -6,7 +7,7 @@ import {
   userMock,
   userRoleMock,
 } from "@/data/usersMock";
-import { emptyOperationLogsResponse, emptyRolesResponse, emptyUsersResponse } from "@/data/emptyResponses";
+import { emptyOperationLogsResponse } from "@/data/emptyResponses";
 import { createProductionTraceId, getRuntimeEnvironmentTag, isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId, DEFAULT_TENANT_ID } from "@/lib/tenantContext";
@@ -53,6 +54,12 @@ type UserRow = {
   updated_at: string | null;
 };
 
+type UserAuthRow = UserRow & {
+  password_hash: string | null;
+  password_salt: string | null;
+  password_algorithm: string | null;
+};
+
 type UserRoleRow = {
   user_id: string;
   role_id: UserRoleName;
@@ -77,6 +84,17 @@ function shouldUseMockData() {
   return isMockDataAllowed() && process.env.DATA_SOURCE_MODE?.trim().toLowerCase() === "mock";
 }
 
+const defaultInternalAdmin = {
+  user_id: "user_admin_001",
+  account: "楼天城",
+  display_name: "楼天城",
+  password_hash: "g+D8BZ+QLxsgO3EJsdIIi0FchxyA5pvk5v/gLYDMl/g=",
+  password_salt: "kWz9jaoFAO9WYkpkQ4xjsQ==",
+  password_algorithm: "pbkdf2_sha256_100000",
+} as const;
+
+let systemIdentityEnsured = false;
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -89,10 +107,6 @@ function tenantId() {
   return currentTenantId();
 }
 
-function defaultTenantUserFallback() {
-  return tenantId() === DEFAULT_TENANT_ID ? mockUsersResponse() : { ...mockUsersResponse(), users: [], user_roles: [] };
-}
-
 function defaultTenantLogFallback() {
   return tenantId() === DEFAULT_TENANT_ID ? mockOperationLogsResponse() : { source: "mock" as const, operation_logs: [] };
 }
@@ -101,6 +115,58 @@ function tenantRoleFromUserRole(role: UserRoleName) {
   if (role === "admin") return "admin";
   if (role === "viewer") return "viewer";
   return "operator";
+}
+
+function hashPassword(password: string, salt: string) {
+  return pbkdf2Sync(password, salt, 100_000, 32, "sha256").toString("base64");
+}
+
+function verifyPassword(password: string, hash: string | null, salt: string | null) {
+  if (!hash || !salt) return false;
+  const candidate = Buffer.from(hashPassword(password, salt), "base64");
+  const expected = Buffer.from(hash, "base64");
+  if (candidate.length !== expected.length) return false;
+  return timingSafeEqual(candidate, expected);
+}
+
+function defaultAdminUser(now = nowIso()): UserItem {
+  return {
+    user_id: defaultInternalAdmin.user_id,
+    email: defaultInternalAdmin.account,
+    display_name: defaultInternalAdmin.display_name,
+    status: "active",
+    default_role: "admin",
+    roles: ["admin"],
+    permissions: permissionKeysForRoles(["admin"], roleMock),
+    last_login_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function internalAdminUsersResponse(source: UsersApiResponse["source"] = "sqlite"): UsersApiResponse {
+  const assignedAt = "2026-06-17T09:00:00-03:00";
+  return {
+    source,
+    users: [defaultAdminUser(assignedAt)],
+    roles: roleMock,
+    permissions: permissionMock,
+    user_roles: [
+      {
+        user_id: defaultInternalAdmin.user_id,
+        role_id: "admin",
+        assigned_at: assignedAt,
+        assigned_by: "system",
+      },
+    ],
+  };
+}
+
+function defaultTenantUserFallback() {
+  if (tenantId() !== DEFAULT_TENANT_ID) {
+    return { source: "sqlite" as const, users: [], roles: roleMock, permissions: permissionMock, user_roles: [] };
+  }
+  return internalAdminUsersResponse("sqlite");
 }
 
 function parsePermissionKeys(value: string | null): string[] {
@@ -216,6 +282,190 @@ function mockOperationLogsResponse(): OperationLogsApiResponse {
   };
 }
 
+function ensureUserSecurityColumns(db: DatabaseSync) {
+  const existingColumns = new Set(
+    asRows<{ name: string }>(db.prepare("PRAGMA table_info(users)").all()).map((row) => row.name),
+  );
+
+  const columns: Record<string, string> = {
+    password_hash: "TEXT",
+    password_salt: "TEXT",
+    password_algorithm: "TEXT",
+  };
+
+  Object.entries(columns).forEach(([columnName, columnType]) => {
+    if (!existingColumns.has(columnName)) {
+      db.prepare(`ALTER TABLE users ADD COLUMN ${columnName} ${columnType}`).run();
+    }
+  });
+}
+
+async function ensureSystemIdentityReady() {
+  if (shouldUseMockData() || systemIdentityEnsured) return;
+
+  try {
+    await withDatabase((db) => {
+      const createdAt = nowIso();
+      ensureUserSecurityColumns(db);
+
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO tenants (tenant_id, name, plan_type, created_at)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run(DEFAULT_TENANT_ID, "Brazil Internal Workspace", "free", createdAt);
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO workspaces (workspace_id, tenant_id, name, shop_count, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run("workspace_demo_default", DEFAULT_TENANT_ID, "默认工作空间", 1, createdAt);
+
+      const insertPermission = db.prepare(
+        `INSERT OR IGNORE INTO permissions (
+           permission_id, permission_key, resource, action, description, created_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      permissionMock.forEach((permission) => {
+        insertPermission.run(
+          permission.permission_id,
+          permission.permission_key,
+          permission.resource,
+          permission.action,
+          permission.description,
+          createdAt,
+        );
+      });
+
+      const upsertRole = db.prepare(
+        `INSERT INTO roles (role_id, role_name, description, is_system, permission_keys_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(role_id) DO UPDATE SET
+           description = excluded.description,
+           is_system = excluded.is_system,
+           permission_keys_json = excluded.permission_keys_json`,
+      );
+      roleMock.forEach((role) => {
+        upsertRole.run(
+          role.role_id,
+          role.role_name,
+          role.description,
+          role.is_system ? 1 : 0,
+          JSON.stringify(role.permissions.map((permission) => permission.permission_key)),
+          createdAt,
+        );
+      });
+
+      const usersCount = (db.prepare("SELECT COUNT(*) AS count FROM users").get() as { count: number }).count;
+      if (usersCount === 0) {
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO users (
+               user_id, email, display_name, status, default_role, last_login_at,
+               created_at, updated_at, password_hash, password_salt, password_algorithm
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            defaultInternalAdmin.user_id,
+            defaultInternalAdmin.account,
+            defaultInternalAdmin.display_name,
+            "active",
+            "admin",
+            null,
+            createdAt,
+            createdAt,
+            defaultInternalAdmin.password_hash,
+            defaultInternalAdmin.password_salt,
+            defaultInternalAdmin.password_algorithm,
+          );
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO user_roles (user_id, role_id, assigned_at, assigned_by)
+             VALUES (?, ?, ?, ?)`,
+          )
+          .run(defaultInternalAdmin.user_id, "admin", createdAt, "system");
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO tenant_users (tenant_id, user_id, role)
+             VALUES (?, ?, ?)`,
+          )
+          .run(DEFAULT_TENANT_ID, defaultInternalAdmin.user_id, "owner");
+        db
+          .prepare(
+            `INSERT OR IGNORE INTO operation_logs (
+               log_id, action_type, actor_user_id, actor_email, target_type,
+               target_id, summary, status, created_at, metadata_json, tenant_id
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            "oplog_internal_admin_seeded",
+            "admin_seeded",
+            "system",
+            "system@local",
+            "users",
+            defaultInternalAdmin.user_id,
+            "内部管理员账号已准备。",
+            "success",
+            createdAt,
+            JSON.stringify({ mode: "internal_admin_bootstrap" }),
+            DEFAULT_TENANT_ID,
+          );
+      } else {
+        db
+          .prepare(
+            `UPDATE users
+                SET password_hash = COALESCE(password_hash, ?),
+                    password_salt = COALESCE(password_salt, ?),
+                    password_algorithm = COALESCE(password_algorithm, ?),
+                    status = CASE WHEN status IS NULL THEN 'active' ELSE status END,
+                    default_role = CASE WHEN default_role IS NULL THEN 'admin' ELSE default_role END,
+                    updated_at = COALESCE(updated_at, ?)
+              WHERE user_id = ?
+                 OR email = ?
+                 OR display_name = ?`,
+          )
+          .run(
+            defaultInternalAdmin.password_hash,
+            defaultInternalAdmin.password_salt,
+            defaultInternalAdmin.password_algorithm,
+            createdAt,
+            defaultInternalAdmin.user_id,
+            defaultInternalAdmin.account,
+            defaultInternalAdmin.display_name,
+          );
+
+        const adminRow = db
+          .prepare("SELECT user_id FROM users WHERE user_id = ? OR email = ? OR display_name = ? LIMIT 1")
+          .get(defaultInternalAdmin.user_id, defaultInternalAdmin.account, defaultInternalAdmin.display_name) as
+          | { user_id: string }
+          | undefined;
+
+        if (adminRow) {
+          db
+            .prepare(
+              `INSERT OR IGNORE INTO user_roles (user_id, role_id, assigned_at, assigned_by)
+               VALUES (?, ?, ?, ?)`,
+            )
+            .run(adminRow.user_id, "admin", createdAt, "system");
+          db
+            .prepare(
+              `INSERT OR IGNORE INTO tenant_users (tenant_id, user_id, role)
+               VALUES (?, ?, ?)`,
+            )
+            .run(DEFAULT_TENANT_ID, adminRow.user_id, "owner");
+        }
+      }
+    }, false);
+
+    systemIdentityEnsured = true;
+  } catch {
+    // Missing or read-only SQLite should not block /login; API falls back to internal admin.
+  }
+}
+
 async function readUsersPayload(): Promise<Omit<UsersApiResponse, "source">> {
   return withDatabase((db) => {
     const permissions = asRows<PermissionRow>(
@@ -278,13 +528,32 @@ export async function getUsersResponse(): Promise<UsersApiResponse> {
   if (shouldUseMockData()) return defaultTenantUserFallback();
 
   try {
+    await ensureSystemIdentityReady();
     const payload = await readUsersPayload();
     if (payload.users.length === 0 || payload.roles.length === 0 || payload.permissions.length === 0) {
-      return isMockDataAllowed() ? defaultTenantUserFallback() : emptyUsersResponse;
+      return defaultTenantUserFallback();
+    }
+    const hasActiveAdmin = payload.users.some((user) => user.status === "active" && user.roles.includes("admin"));
+    if (!hasActiveAdmin && tenantId() === DEFAULT_TENANT_ID) {
+      return {
+        source: "sqlite",
+        users: [...payload.users, defaultAdminUser()],
+        roles: payload.roles.length ? payload.roles : roleMock,
+        permissions: payload.permissions.length ? payload.permissions : permissionMock,
+        user_roles: [
+          ...payload.user_roles,
+          {
+            user_id: defaultInternalAdmin.user_id,
+            role_id: "admin",
+            assigned_at: nowIso(),
+            assigned_by: "system",
+          },
+        ],
+      };
     }
     return { source: "sqlite", ...payload };
   } catch {
-    return isMockDataAllowed() ? defaultTenantUserFallback() : emptyUsersResponse;
+    return defaultTenantUserFallback();
   }
 }
 
@@ -292,13 +561,14 @@ export async function getRolesResponse(): Promise<RolesApiResponse> {
   if (shouldUseMockData()) return mockRolesResponse();
 
   try {
+    await ensureSystemIdentityReady();
     const payload = await readUsersPayload();
     if (payload.roles.length === 0 || payload.permissions.length === 0) {
-      return isMockDataAllowed() ? mockRolesResponse() : emptyRolesResponse;
+      return { source: "sqlite", roles: roleMock, permissions: permissionMock };
     }
     return { source: "sqlite", roles: payload.roles, permissions: payload.permissions };
   } catch {
-    return isMockDataAllowed() ? mockRolesResponse() : emptyRolesResponse;
+    return { source: "sqlite", roles: roleMock, permissions: permissionMock };
   }
 }
 
@@ -586,5 +856,78 @@ export async function updateLocalUser(params: {
       ...response,
       user: response.users.find((item) => item.user_id === userId) ?? null,
     };
+  }
+}
+
+export async function authenticateLocalUser(params: {
+  user_id?: string;
+  password?: string;
+}): Promise<{ source: UsersApiResponse["source"]; user: UserItem; redirect_to: string; message: string }> {
+  const userId = params.user_id?.trim();
+  const password = params.password ?? "";
+
+  if (!userId || !password) {
+    throw new Error("请选择用户并输入密码。");
+  }
+
+  if (shouldUseMockData()) {
+    const fallback = defaultTenantUserFallback();
+    const user = fallback.users.find((item) => item.user_id === userId);
+    if (!user || !verifyPassword(password, defaultInternalAdmin.password_hash, defaultInternalAdmin.password_salt)) {
+      throw new Error("账号或密码不正确。");
+    }
+    return { source: fallback.source, user, redirect_to: "/dashboard", message: "登录成功。" };
+  }
+
+  try {
+    await ensureSystemIdentityReady();
+
+    const authenticatedUserId = await withDatabase((db) => {
+      ensureUserSecurityColumns(db);
+
+      const row = db
+        .prepare(
+          `SELECT user_id, email, display_name, status, default_role, last_login_at,
+                  created_at, updated_at, password_hash, password_salt, password_algorithm
+             FROM users
+            WHERE user_id = ?
+              AND status = 'active'
+            LIMIT 1`,
+        )
+        .get(userId) as UserAuthRow | undefined;
+
+      if (!row || !verifyPassword(password, row.password_hash, row.password_salt)) {
+        throw new Error("账号或密码不正确。");
+      }
+
+      const loginAt = nowIso();
+      db
+        .prepare("UPDATE users SET last_login_at = ?, updated_at = ? WHERE user_id = ?")
+        .run(loginAt, loginAt, row.user_id);
+      return row.user_id;
+    }, false);
+
+    await recordOperationLog({
+      action_type: "user_login",
+      actor_user_id: authenticatedUserId,
+      actor_email: authenticatedUserId === defaultInternalAdmin.user_id ? defaultInternalAdmin.account : authenticatedUserId,
+      target_type: "session",
+      target_id: "local_session",
+      summary: "本地用户登录成功。",
+      metadata: { login_method: "local_password" },
+    });
+
+    const response = await getUsersResponse();
+    const user = response.users.find((item) => item.user_id === authenticatedUserId);
+    if (!user) throw new Error("账号或密码不正确。");
+
+    return { source: response.source, user, redirect_to: "/dashboard", message: "登录成功。" };
+  } catch (error) {
+    const fallback = defaultTenantUserFallback();
+    const fallbackUser = fallback.users.find((item) => item.user_id === userId);
+    if (fallbackUser && verifyPassword(password, defaultInternalAdmin.password_hash, defaultInternalAdmin.password_salt)) {
+      return { source: fallback.source, user: fallbackUser, redirect_to: "/dashboard", message: "登录成功。" };
+    }
+    throw error instanceof Error ? error : new Error("账号或密码不正确。");
   }
 }

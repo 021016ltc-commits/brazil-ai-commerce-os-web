@@ -145,8 +145,8 @@ function makeUser(params: Omit<UserItem, "permissions">): UserItem {
 export const userMock: UserItem[] = [
   makeUser({
     user_id: "user_admin_001",
-    email: "admin@local.br",
-    display_name: "Admin Local",
+    email: "楼天城",
+    display_name: "楼天城",
     status: "active",
     default_role: "admin",
     roles: ["admin"],
@@ -202,13 +202,25 @@ export const userMock: UserItem[] = [
 
 export const operationLogMock: OperationLogItem[] = [
   {
+    log_id: "oplog_internal_admin_seeded_001",
+    action_type: "admin_seeded",
+    actor_user_id: "system",
+    actor_email: "system@local",
+    target_type: "users",
+    target_id: "user_admin_001",
+    summary: "内部管理员账号已准备。",
+    status: "success",
+    created_at: "2026-06-17T09:00:00-03:00",
+    metadata_json: "{\"mode\":\"internal_admin_bootstrap\"}",
+  },
+  {
     log_id: "oplog_20260617_login_001",
-    action_type: "login",
+    action_type: "user_login",
     actor_user_id: "user_admin_001",
-    actor_email: "admin@local.br",
+    actor_email: "楼天城",
     target_type: "session",
     target_id: "local_session_admin",
-    summary: "Admin Local 登录本地系统。",
+    summary: "楼天城 登录本地系统。",
     status: "success",
     created_at: "2026-06-17T09:30:00-03:00",
     metadata_json: "{\"mode\":\"local\"}",

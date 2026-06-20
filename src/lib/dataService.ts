@@ -72,6 +72,7 @@ import { getSelfOptimizationAnalysisResponse, getSelfOptimizationRecommendations
 import { getSystemHealthResponse } from "@/lib/systemHealth";
 import {
   createLocalUser,
+  authenticateLocalUser,
   getOperationLogsResponse,
   getRolesResponse,
   getUsersResponse,
@@ -416,6 +417,10 @@ export const dataService = {
   }) {
     clearBusinessCaches();
     return updateLocalUser(params);
+  },
+
+  loginUser(params: { user_id?: string; password?: string }) {
+    return authenticateLocalUser(params);
   },
 
   getRoles() {

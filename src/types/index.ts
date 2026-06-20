@@ -851,7 +851,9 @@ export type PermissionResource =
 
 export type OperationLogAction =
   | "login"
+  | "user_login"
   | "logout"
+  | "admin_seeded"
   | "approval"
   | "action_create"
   | "action_approve"

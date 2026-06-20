@@ -13,7 +13,9 @@ export async function GET(request: Request) {
 
 const allowedActions = new Set<OperationLogAction>([
   "login",
+  "user_login",
   "logout",
+  "admin_seeded",
   "approval",
   "user_create",
   "user_update",
