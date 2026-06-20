@@ -211,8 +211,6 @@ export default function DecisionFeedbackPage() {
 
   return (
     <div className="space-y-8">
-      <DecisionFeedbackExperienceCharts />
-
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
@@ -258,6 +256,16 @@ export default function DecisionFeedbackPage() {
           />
         ))}
       </section>
+
+      <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink">
+          查看复盘图表
+          <span className="text-xs font-medium text-slate-500">命中率、利润、人工动作</span>
+        </summary>
+        <div className="border-t border-line p-3">
+          <DecisionFeedbackExperienceCharts />
+        </div>
+      </details>
 
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-lg border border-line bg-white p-5 shadow-panel">

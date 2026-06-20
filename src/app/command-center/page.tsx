@@ -77,7 +77,6 @@ const quickLinks = [
   { href: "/profit", label: zhCN.nav.profit, icon: Wallet },
   { href: "/business-impact", label: zhCN.nav.businessImpact, icon: LineChart },
   { href: "/self-optimization", label: zhCN.nav.selfOptimization, icon: SlidersHorizontal },
-  { href: "/verification", label: zhCN.nav.verification, icon: ClipboardCheck },
 ];
 
 function riskScore(level: RiskLevel) {

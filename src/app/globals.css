@@ -57,3 +57,123 @@ textarea {
 [title="Preferences"] {
   display: none !important;
 }
+
+.baico-compact {
+  font-size: 14px;
+}
+
+.baico-compact .space-y-10 > :not([hidden]) ~ :not([hidden]),
+.baico-compact .space-y-9 > :not([hidden]) ~ :not([hidden]),
+.baico-compact .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 16px !important;
+}
+
+.baico-compact .space-y-6 > :not([hidden]) ~ :not([hidden]),
+.baico-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px !important;
+}
+
+.baico-compact .gap-6,
+.baico-compact .gap-5 {
+  gap: 16px !important;
+}
+
+.baico-compact .gap-4 {
+  gap: 12px !important;
+}
+
+.baico-compact .p-6,
+.baico-compact .p-5 {
+  padding: 14px !important;
+}
+
+.baico-compact .p-4 {
+  padding: 12px !important;
+}
+
+.baico-compact .px-4 {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.baico-compact .py-4,
+.baico-compact .py-3 {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.baico-compact h1 {
+  font-size: 22px !important;
+  line-height: 1.25 !important;
+}
+
+.baico-compact h2 {
+  font-size: 18px !important;
+  line-height: 1.3 !important;
+}
+
+.baico-compact .text-5xl {
+  font-size: 32px !important;
+  line-height: 1.1 !important;
+}
+
+.baico-compact .text-4xl,
+.baico-compact .text-3xl {
+  font-size: 24px !important;
+  line-height: 1.15 !important;
+}
+
+.baico-compact .text-2xl {
+  font-size: 20px !important;
+  line-height: 1.25 !important;
+}
+
+.baico-compact p {
+  line-height: 1.45 !important;
+}
+
+.baico-compact p.max-w-2xl,
+.baico-compact p.max-w-3xl {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.baico-compact table {
+  font-size: 13px;
+}
+
+.baico-compact th,
+.baico-compact td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.baico-compact button.h-10,
+.baico-compact a.h-10,
+.baico-compact input.h-10,
+.baico-compact select.h-10 {
+  min-height: 32px !important;
+  height: 32px !important;
+}
+
+.baico-compact .min-h-16 {
+  min-height: 48px !important;
+}
+
+.baico-compact .min-h-14 {
+  min-height: 40px !important;
+}
+
+.baico-compact .shadow-panel {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.baico-compact details.compact-details > summary {
+  list-style: none;
+}
+
+.baico-compact details.compact-details > summary::-webkit-details-marker {
+  display: none;
+}

@@ -400,6 +400,12 @@ export default function SystemHealthPage() {
         />
       </section>
 
+      <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink">
+          查看诊断详情
+          <span className="text-xs font-medium text-slate-500">接口、一致性、数据源、日志</span>
+        </summary>
+        <div className="space-y-5 border-t border-line p-3">
       <section className="space-y-5">
         <SectionHeader
           eyebrow="生产运行状态"
@@ -574,6 +580,8 @@ export default function SystemHealthPage() {
           </div>
         </div>
       </section>
+        </div>
+      </details>
     </div>
   );
 }

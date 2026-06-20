@@ -134,8 +134,6 @@ export default function SelfOptimizationPage() {
 
   return (
     <div className="space-y-8">
-      <SelfOptimizationExperienceCharts />
-
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
@@ -192,6 +190,16 @@ export default function SelfOptimizationPage() {
           </div>
         </div>
       </section>
+
+      <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink">
+          查看规则图表
+          <span className="text-xs font-medium text-slate-500">学习趋势、命中排行、健康状态</span>
+        </summary>
+        <div className="border-t border-line p-3">
+          <SelfOptimizationExperienceCharts />
+        </div>
+      </details>
 
       <section className="space-y-5">
         <SectionHeader

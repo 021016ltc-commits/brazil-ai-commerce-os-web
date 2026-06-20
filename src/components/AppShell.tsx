@@ -394,9 +394,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-app px-4 py-6 sm:px-6">
-          <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 space-y-6">
+        <main className="baico-compact mx-auto w-full max-w-app px-4 py-4 sm:px-6">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 space-y-4">
               {!currentUser ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber">
                   当前未选择本地用户。请从 /login 选择角色后进入系统。

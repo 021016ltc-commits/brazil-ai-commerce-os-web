@@ -149,8 +149,6 @@ export default function BusinessImpactPage() {
 
   return (
     <div className="space-y-8">
-      <BusinessImpactExperienceCharts />
-
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
@@ -253,6 +251,16 @@ export default function BusinessImpactPage() {
           />
         </div>
       </section>
+
+      <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink">
+          查看经营图表
+          <span className="text-xs font-medium text-slate-500">利润趋势、策略排行、动作占比</span>
+        </summary>
+        <div className="border-t border-line p-3">
+          <BusinessImpactExperienceCharts />
+        </div>
+      </details>
 
       <section className="space-y-5">
         <SectionHeader
