@@ -2,6 +2,7 @@
 
 import { Check, Clock3, Filter, History, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyApprovalsResponse } from "@/data/emptyResponses";
 import { buildApprovalHistoryItem, buildApprovalStats, approvalPriorityRank } from "@/lib/approvals";
@@ -21,7 +22,7 @@ type SortKey = "created_at" | "priority" | "status";
 const fallbackApprovals: ApprovalsApiResponse = emptyApprovalsResponse;
 
 function sourceLabel(source: ApprovalsApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function recommendationTypeLabel(type: ApprovalQueueItem["recommendation_type"]) {
@@ -88,6 +89,7 @@ export default function ApprovalsPage() {
   const [platformFilter, setPlatformFilter] = useState<"all" | ApprovalQueueItem["platform"]>("all");
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
+  const [busyApprovalId, setBusyApprovalId] = useState<string | null>(null);
 
   async function refreshApprovals() {
     const response = await fetch("/api/approvals", { cache: "no-store" });
@@ -180,6 +182,10 @@ export default function ApprovalsPage() {
   }
 
   async function submitStatus(approvalId: string, status: ReviewStatus) {
+    const actionText = historyActionLabel(status);
+    if (!window.confirm(`确认${actionText}该审批项？`)) return;
+
+    setBusyApprovalId(approvalId);
     const notes = draftNotes[approvalId]?.trim();
     applyOptimisticStatus(approvalId, status, notes);
     setDraftNotes((current) => ({ ...current, [approvalId]: "" }));
@@ -203,33 +209,35 @@ export default function ApprovalsPage() {
       }
     } catch {
       // Keep optimistic local state so fallback data remains usable.
+    } finally {
+      setBusyApprovalId(null);
     }
   }
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 审批中心 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 人工审批，不执行真实平台动作
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">审批中心</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">审批中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把本地建议队列升级成完整人工审批系统。你可以筛出今天最该先看的审批项，决定批准、拒绝或延后处理，
-                同时保留审批历史和备注，但不会触发任何真实平台执行动作。
+                把建议队列转成人工审批事项，批准、驳回或延后都只更新本地状态，不触发真实平台动作。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => void refreshApprovals().catch(() => undefined)} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
@@ -326,8 +334,8 @@ export default function ApprovalsPage() {
               className="h-11 w-full rounded-md border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-forest"
             >
               <option value="created_at">按创建时间</option>
-              <option value="priority">按 priority</option>
-              <option value="status">按 status</option>
+              <option value="priority">按优先级</option>
+              <option value="status">按状态</option>
             </select>
           </label>
         </div>
@@ -364,7 +372,7 @@ export default function ApprovalsPage() {
                         <div>
                           <div className="text-sm font-semibold text-ink">{item.recommendation_summary}</div>
                           <div className="mt-1 text-xs text-slate-500">
-                            {item.approval_id} / {product?.title_current ?? product?.title ?? item.product_uid}
+                            审批编号 {item.approval_id} / {product?.title_current ?? product?.title ?? item.product_uid}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -379,15 +387,15 @@ export default function ApprovalsPage() {
                           <div className="mt-1 text-sm text-ink">{recommendationTypeLabel(item.recommendation_type)}</div>
                         </div>
                         <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-400">商品ID</div>
+                          <div className="text-xs text-slate-400">商品编号</div>
                           <div className="mt-1 text-sm text-ink">{item.product_uid}</div>
                         </div>
                         <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-400">优先级</div>
+                          <div className="text-xs text-slate-400">优先级</div>
                           <div className="mt-1 text-sm text-ink">{priorityLabel(item.priority)}</div>
                         </div>
                         <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-400">创建时间</div>
+                          <div className="text-xs text-slate-400">创建时间</div>
                           <div className="mt-1 text-sm text-ink">{item.created_at}</div>
                         </div>
                       </div>
@@ -424,30 +432,30 @@ export default function ApprovalsPage() {
                       <div className="grid gap-2 sm:grid-cols-3">
                         <button
                           type="button"
-                          disabled={!actionable}
+                          disabled={!actionable || busyApprovalId === item.approval_id}
                           onClick={() => submitStatus(item.approval_id, "approved_local")}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-forest px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
                           <Check className="h-4 w-4" aria-hidden="true" />
-                          批准
+                          {busyApprovalId === item.approval_id ? "处理中" : "批准"}
                         </button>
                         <button
                           type="button"
-                          disabled={!actionable}
+                          disabled={!actionable || busyApprovalId === item.approval_id}
                           onClick={() => submitStatus(item.approval_id, "rejected_local")}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-medium text-coral disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           <X className="h-4 w-4" aria-hidden="true" />
-                          拒绝
+                          {busyApprovalId === item.approval_id ? "处理中" : "驳回"}
                         </button>
                         <button
                           type="button"
-                          disabled={!actionable}
+                          disabled={!actionable || busyApprovalId === item.approval_id}
                           onClick={() => submitStatus(item.approval_id, "deferred_local")}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           <Clock3 className="h-4 w-4" aria-hidden="true" />
-                          延后处理
+                          {busyApprovalId === item.approval_id ? "处理中" : "延后处理"}
                         </button>
                       </div>
 
@@ -481,28 +489,28 @@ export default function ApprovalsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
+          <div className="operator-scroll">
+            <table className="operator-table text-left">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">approval_id</th>
-                  <th className="px-4 py-3">action</th>
-                  <th className="px-4 py-3">reviewer</th>
-                  <th className="px-4 py-3">reviewed_at</th>
-                  <th className="px-4 py-3">备注</th>
+                  <th>审批编号</th>
+                  <th>动作</th>
+                  <th>处理人</th>
+                  <th>处理时间</th>
+                  <th>备注</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredHistory.map((item) => (
-                  <tr key={item.history_id} className="border-t border-line align-top">
-                    <td className="px-4 py-3 font-medium text-ink">{item.approval_id}</td>
-                    <td className="px-4 py-3">
+                  <tr key={item.history_id}>
+                    <td className="font-medium text-ink">{item.approval_id}</td>
+                    <td>
                       <StatusPill status={item.action} />
                       <div className="mt-1 text-xs text-slate-500">{historyActionLabel(item.action)}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{item.reviewer}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.reviewed_at}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.notes}</td>
+                    <td className="text-slate-700">{item.reviewer}</td>
+                    <td className="text-slate-600">{item.reviewed_at}</td>
+                    <td className="text-slate-600">{item.notes}</td>
                   </tr>
                 ))}
               </tbody>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { DecisionFeedbackExperienceCharts } from "@/components/ModuleExperienceCharts";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import {
   emptyDecisionHistoryResponse,
@@ -64,7 +65,7 @@ const initialForm: FeedbackFormState = {
 };
 
 function sourceLabel(source: DecisionHistoryApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function formatDateTime(value: string) {
@@ -196,51 +197,43 @@ export default function DecisionFeedbackPage() {
     {
       title: "拦截准确率",
       value: formatPercent(metrics.metrics.blocked_correct_rate),
-      detail: "被拦截机会后续被验证为低 ROI 或低转化的比例。",
+      detail: "被拦截机会后续被验证为低收益或低转化的比例。",
       tone: metricTone(metrics.metrics.blocked_correct_rate),
       icon: <ShieldCheck className="h-5 w-5" aria-hidden="true" />,
     },
     {
-      title: "ROI 偏差率",
+      title: "收益偏差率",
       value: formatPercent(metrics.metrics.roi_deviation_rate),
-      detail: "真实 ROI 与决策目标 ROI 的平均偏差，越低越好。",
+      detail: "实际收益表现与决策目标的平均偏差，越低越好。",
       tone: metricTone(metrics.metrics.roi_deviation_rate, true),
       icon: <Gauge className="h-5 w-5" aria-hidden="true" />,
     },
   ];
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 决策复盘 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(metrics.source)}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 只记录与分析，不自动执行
               </span>
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-ink">决策复盘</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-                这里把 Shopee 数据、人工决策和真实经营结果串起来。系统会记录你买入、忽略、观察或拒绝后的实际销售、利润和 ROI，
-                再计算历史决策是否命中，为后续评分权重和推荐优先级提供依据。
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">决策复盘</h1>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                记录买入、忽略、观察或拒绝后的实际销售、利润和收益表现，用来判断推荐是否可靠。
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void refreshData().catch(() => undefined)}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
-          >
-            <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-            刷新数据
-          </button>
+          <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems />
         </div>
       </section>
 

@@ -12,6 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BusinessImpactExperienceCharts } from "@/components/ModuleExperienceCharts";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { emptyBusinessImpactResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { actionTypeLabelZh, statusLabel } from "@/locales/zh-CN";
@@ -25,18 +26,18 @@ const sortLabels: Record<SortKey, string> = {
   profit_delta: "按利润影响排序",
   gmv_delta: "按 GMV 影响排序",
   decision_accuracy: "按决策准确率排序",
-  roi_prediction_error: "按 ROI 预测误差排序",
+  roi_prediction_error: "按收益预测偏差排序",
 };
 
 function sourceLabel(source: BusinessImpactApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function impactSourceLabel(source: BusinessImpactActionItem["source"]) {
   return {
-    action_queue: "执行审批池",
-    decision_feedback: "决策反馈",
-    shopee_cache: "Shopee 缓存",
+    action_queue: "执行审批事项",
+    decision_feedback: "决策复盘",
+    shopee_cache: "Shopee店铺数据",
     manual: "人工录入",
   }[source];
 }
@@ -148,29 +149,29 @@ export default function BusinessImpactPage() {
   const summary = data.summary;
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 经营结果分析 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 只做归因分析，不自动执行
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">经营结果分析</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">经营结果分析</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面衡量历史决策和受控执行建议对利润、库存和 GMV 的真实影响。
-                它只读取本地 action、decision feedback 和 Shopee 缓存数据，不连接外部 API，也不会改价、上架、下单或调整广告。
+                衡量历史决策和受控执行建议对利润、库存和销售额的影响，只分析不执行。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -189,7 +190,7 @@ export default function BusinessImpactPage() {
               <div className="mt-1 text-sm text-slate-500">利润与综合影响为正的动作占比。</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">ROI 预测误差</div>
+              <div className="text-xs text-slate-400">收益预测偏差</div>
               <div className="mt-2 text-2xl font-semibold text-ink">
                 {formatPercent(summary.ROI_prediction_error, 1)}
               </div>
@@ -335,18 +336,18 @@ export default function BusinessImpactPage() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-line bg-white shadow-panel">
-          <div className="overflow-x-auto">
-            <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
+          <div className="operator-scroll">
+            <table className="operator-table text-left">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">动作</th>
-                  <th className="px-4 py-3">平台</th>
-                  <th className="px-4 py-3">利润变化</th>
-                  <th className="px-4 py-3">库存变化</th>
-                  <th className="px-4 py-3">GMV变化</th>
-                  <th className="px-4 py-3">准确率</th>
-                  <th className="px-4 py-3">ROI误差</th>
-                  <th className="px-4 py-3">归因说明</th>
+                  <th>动作</th>
+                  <th>平台</th>
+                  <th>利润变化</th>
+                  <th>库存变化</th>
+                  <th>销售额变化</th>
+                  <th>准确率</th>
+                  <th>收益偏差</th>
+                  <th>归因说明</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -440,7 +441,7 @@ export default function BusinessImpactPage() {
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <div className="text-sm text-slate-600">利润 {formatBrl(item.total_profit_delta)}</div>
                   <div className="text-sm text-slate-600">GMV {formatBrl(item.total_gmv_delta)}</div>
-                  <div className="text-sm text-slate-600">ROI误差 {formatPercent(item.roi_prediction_error, 1)}</div>
+                  <div className="text-sm text-slate-600">收益偏差 {formatPercent(item.roi_prediction_error, 1)}</div>
                 </div>
               </div>
             ))}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { InventoryExperienceCharts } from "@/components/InventoryExperienceCharts";
+import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { emptyInventoryResponse } from "@/data/emptyResponses";
 import { formatBrl } from "@/lib/format";
 import { riskTypeLabel } from "@/locales/zh-CN";
@@ -31,7 +32,7 @@ type SortKey = "days_of_stock" | "stock_qty" | "stockout_risk" | "reorder_priori
 const fallbackInventory: InventoryApiResponse = emptyInventoryResponse;
 
 function sourceLabel(source: InventoryApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function formatNumber(value: number, digits = 0) {
@@ -232,52 +233,48 @@ export default function InventoryPage() {
   const snapshot = data.snapshot;
 
   return (
-    <div className="space-y-8">
-      <InventoryExperienceCharts />
-
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 库存中心 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
-              </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                本地库存模型，不连接真实仓库系统
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">库存中心</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">库存中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把库存总览、SKU监控、库存风险和补货建议放到同一个面板里，帮助运营判断今天先看有没有货、会不会断货、会不会积压，以及库存是否已经开始拖利润和现金流。它只展示真实业务数据，真实数据源不可用时显示空状态与连接提示。
+                快速判断有没有货、会不会断货、会不会积压，以及今天是否需要人工复核补货。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">库存总货值</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatBrl(snapshot.total_inventory_value)}</div>
-              <div className="mt-1 text-sm text-slate-500">用于判断库存是否开始占压现金流。</div>
-            </div>
-            <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">库存周转天数</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatNumber(snapshot.inventory_turnover_days, 1)} 天</div>
-              <div className="mt-1 text-sm text-slate-500">越长越容易形成库存沉淀。</div>
-            </div>
-            <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">库存健康分</div>
+              <div className="text-xs text-slate-500">库存健康度</div>
               <div className="mt-2 text-2xl font-semibold text-forest">{formatNumber(snapshot.stock_health_score)}</div>
-              <div className="mt-1 text-sm text-slate-500">用于快速衡量整体库存结构是否稳健。</div>
+              <div className="mt-1 text-xs text-slate-500">周转 {formatNumber(snapshot.inventory_turnover_days, 1)} 天</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">断货风险数量</div>
+              <div className="text-xs text-slate-500">缺货风险</div>
               <div className="mt-2 text-2xl font-semibold text-coral">{snapshot.stockout_risk_count}</div>
-              <div className="mt-1 text-sm text-slate-500">优先人工确认这些品的补货时机。</div>
+              <div className="mt-1 text-xs text-slate-500">需要优先确认</div>
+            </div>
+            <div className="rounded-lg border border-line bg-white/90 p-4">
+              <div className="text-xs text-slate-500">滞销风险</div>
+              <div className="mt-2 text-2xl font-semibold text-amber">{snapshot.slow_moving_sku_count}</div>
+              <div className="mt-1 text-xs text-slate-500">积压风险 {snapshot.overstock_risk_count}</div>
+            </div>
+            <div className="rounded-lg border border-line bg-white/90 p-4">
+              <div className="text-xs text-slate-500">补货建议</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{data.reorder_recommendations.length}</div>
+              <div className="mt-1 text-xs text-slate-500">只建议，不自动补货</div>
             </div>
           </div>
         </div>
@@ -335,6 +332,8 @@ export default function InventoryPage() {
           </article>
         </div>
       </section>
+
+      <InventoryExperienceCharts />
 
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -427,43 +426,47 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1220px] text-left text-sm">
+          <div className="operator-scroll hidden md:block">
+            <table className="operator-table text-left">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">商品ID</th>
-                  <th className="px-4 py-3">商品名称</th>
-                  <th className="px-4 py-3">平台</th>
-                  <th className="px-4 py-3">库存数量</th>
-                  <th className="px-4 py-3">日均销量</th>
-                  <th className="px-4 py-3">库存天数</th>
-                  <th className="px-4 py-3">补货点</th>
-                  <th className="px-4 py-3">建议补货量</th>
-                  <th className="px-4 py-3">库存状态</th>
+                  <th>商品</th>
+                  <th>当前库存</th>
+                  <th>日均销量</th>
+                  <th>可售天数</th>
+                  <th>风险等级</th>
+                  <th>建议动作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInventoryStock.map((item) => (
-                  <tr key={item.inventory_item_id} className="border-t border-line align-top">
-                    <td className="px-4 py-3 font-medium text-ink">{item.product_uid}</td>
-                    <td className="px-4 py-3 font-medium text-ink">{item.product_name}</td>
-                    <td className="px-4 py-3 text-slate-700">{item.platform}</td>
-                    <td className="px-4 py-3">{formatNumber(item.stock_qty)}</td>
-                    <td className="px-4 py-3">{formatNumber(item.daily_sales_avg, 1)}</td>
-                    <td className="px-4 py-3">{formatNumber(item.days_of_stock, 1)}</td>
-                    <td className="px-4 py-3">{formatNumber(item.reorder_point)}</td>
-                    <td className="px-4 py-3">{formatNumber(item.suggested_reorder_qty)}</td>
-                    <td className="px-4 py-3">
+                  <tr key={item.inventory_item_id} className={item.stock_status === "stockout_risk" ? "operator-risk-row" : undefined}>
+                    <td>
+                      <div className="font-medium text-ink">{item.product_name}</div>
+                      <div className="mt-1 text-xs text-slate-500">{item.platform}</div>
+                    </td>
+                    <td>{formatNumber(item.stock_qty)}</td>
+                    <td>{formatNumber(item.daily_sales_avg, 1)}</td>
+                    <td>{formatNumber(item.days_of_stock, 1)} 天</td>
+                    <td>
                       <span
                         className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${stockStatusBadge(item.stock_status)}`}
                       >
                         {stockStatusLabel(item.stock_status)}
                       </span>
                     </td>
+                    <td className="text-forest">
+                      {item.stock_status === "stockout_risk" || item.stock_status === "reorder_soon"
+                        ? `建议补货 ${formatNumber(item.suggested_reorder_qty)}`
+                        : "保持观察"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="px-5 py-4">
+            <ColumnSettingsNote hiddenFields={["商品编号", "补货点", "建议补货量明细", "库存记录编号", "平台原始库存状态"]} />
           </div>
 
           <div className="grid gap-3 p-4 md:hidden">

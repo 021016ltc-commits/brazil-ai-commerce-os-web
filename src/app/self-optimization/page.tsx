@@ -12,6 +12,7 @@ import {
   Target,
 } from "lucide-react";
 import { SelfOptimizationExperienceCharts } from "@/components/ModuleExperienceCharts";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { emptySelfOptimizationResponse } from "@/data/emptyResponses";
 import { formatCount, formatPercent } from "@/lib/format";
 import type {
@@ -25,7 +26,7 @@ type GroupFilter = "all" | SelfOptimizationRuleGroup;
 type StatusFilter = "all" | SelfOptimizationStatus;
 
 function sourceLabel(source: SelfOptimizationApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function statusLabel(status: SelfOptimizationStatus) {
@@ -133,29 +134,29 @@ export default function SelfOptimizationPage() {
   );
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 规则优化 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 仅生成建议，不自动改规则
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">规则优化</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">规则优化</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面根据历史业务结果分析规则表现，识别失败模式，并生成评分权重优化建议。
-                所有建议都需要人工审批，不会自动修改代码、生产规则或任何外部系统。
+                根据历史业务结果识别规则偏差并生成优化建议，所有建议只供人工复核。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -174,7 +175,7 @@ export default function SelfOptimizationPage() {
               <div className="mt-1 text-sm text-slate-500">越低说明误判和权重偏差越少。</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">ROI预测误差</div>
+              <div className="text-xs text-slate-400">收益预测偏差</div>
               <div className="mt-2 text-2xl font-semibold text-ink">
                 {formatPercent(data.summary.roi_prediction_error, 1)}
               </div>
@@ -205,7 +206,7 @@ export default function SelfOptimizationPage() {
         <SectionHeader
           eyebrow="规则表现分析"
           title="哪些规则稳定，哪些规则需要复盘"
-          description="这里分析决策、评分、风险、审批和执行规则的命中率、偏差率、ROI 误差和暂不推进误判率。"
+          description="这里分析决策、评分、风险、审批和执行规则的命中率、偏差率、收益偏差和暂不推进误判率。"
         />
 
         <div className="flex flex-wrap gap-3 rounded-lg border border-line bg-white p-4 shadow-panel">
@@ -266,7 +267,7 @@ export default function SelfOptimizationPage() {
                   <div className="mt-1 font-semibold text-amber">{formatPercent(item.bias_rate, 1)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">ROI误差</div>
+                  <div className="text-xs text-slate-400">收益偏差</div>
                   <div className="mt-1 font-semibold text-ink">{formatPercent(item.roi_prediction_error, 1)}</div>
                 </div>
               </div>
@@ -329,7 +330,7 @@ export default function SelfOptimizationPage() {
           <SectionHeader
             eyebrow="失败模式识别"
             title="优先复盘容易伤利润的模式"
-            description="系统会标记高 ROI 被误拦截、低 ROI 被建议推进和高风险误判。"
+            description="系统会标记高收益机会被误拦截、低收益事项被建议推进和高风险误判。"
           />
           <div className="mt-5 space-y-3">
             {data.failure_patterns.map((item) => (
@@ -391,7 +392,7 @@ export default function SelfOptimizationPage() {
           <SectionHeader
             eyebrow="最佳策略沉淀"
             title="值得继续保留的规则"
-            description="按命中率、偏差率和 ROI 预测误差综合排序。"
+            description="按命中率、偏差率和收益预测偏差综合排序。"
           />
           <div className="mt-5 space-y-3">
             {data.top_performing_rules.map((item) => (

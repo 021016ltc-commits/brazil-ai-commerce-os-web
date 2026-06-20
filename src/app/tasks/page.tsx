@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Target,
 } from "lucide-react";
+import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { emptyTasksResponse } from "@/data/emptyResponses";
 import type {
   TaskPriority,
@@ -44,7 +45,7 @@ function formatCount(value: number) {
 }
 
 function sourceLabel(source: TasksApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function priorityLabel(priority: TaskPriority) {
@@ -100,6 +101,23 @@ function riskRank(level: TodayTaskItem["risk_level"]) {
 
 function priorityRank(priority: TaskPriority) {
   return { high: 3, medium: 2, low: 1 }[priority];
+}
+
+function taskStatusLabel(task: TodayTaskItem) {
+  if (task.priority === "high") return "待处理";
+  if (task.priority === "medium") return "处理中";
+  if (task.estimated_profit_impact <= 0 && task.risk_level === "low") return "已忽略";
+  return "已完成";
+}
+
+function taskStatusBadge(task: TodayTaskItem) {
+  const status = taskStatusLabel(task);
+  return ({
+    待处理: "border-amber-200 bg-amber-50 text-amber",
+    处理中: "border-blue-200 bg-blue-50 text-blue-700",
+    已完成: "border-emerald-200 bg-emerald-50 text-forest",
+    已忽略: "border-slate-200 bg-slate-50 text-slate-600",
+  } as Record<string, string>)[status];
 }
 
 function sortTasks(items: TodayTaskItem[], sortBy: SortKey) {
@@ -164,17 +182,17 @@ function KpiCard({
   }[tone];
 
   return (
-    <article className="rounded-lg border border-line bg-white p-4 shadow-panel">
+    <article className="min-h-[104px] rounded-lg border border-line bg-white p-3 shadow-panel">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-slate-600">{label}</div>
-          <div className="mt-2 text-3xl font-semibold text-ink">{value}</div>
+          <div className="mt-1 text-2xl font-semibold text-ink">{value}</div>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-md ${toneClass}`}>
           {icon}
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-500">{detail}</p>
+      <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{detail}</p>
     </article>
   );
 }
@@ -210,49 +228,44 @@ function BarList({
 
 function TaskCard({ task }: { task: TodayTaskItem }) {
   return (
-    <Link
-      href={task.href}
-      className="block rounded-lg border border-line bg-white p-4 shadow-panel transition hover:border-forest/40 hover:shadow-sm"
-    >
+    <article className="rounded-lg border border-line bg-white p-3 shadow-panel transition hover:border-forest/40 hover:shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium ${priorityBadge(task.priority)}`}>
               {priorityLabel(task.priority)}
             </span>
+            <span className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium ${taskStatusBadge(task)}`}>
+              {taskStatusLabel(task)}
+            </span>
             <span className="inline-flex h-7 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
               {sourceModuleLabel(task.source_module)}
-            </span>
-            <span className="inline-flex h-7 items-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600">
-              {taskTypeLabel(task.task_type)}
             </span>
           </div>
           <h3 className="mt-3 text-base font-semibold text-ink">{task.title}</h3>
           <div className="mt-1 text-sm font-medium text-ink">{task.task_title}</div>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{task.summary}</p>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{task.summary}</p>
         </div>
-        <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-md bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-wide text-slate-400">profit</div>
-          <div className="mt-1 text-sm font-semibold text-ink">{formatBrl(task.estimated_profit_impact)}</div>
-        </div>
-        <div className="rounded-md bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-wide text-slate-400">GMV</div>
-          <div className="mt-1 text-sm font-semibold text-ink">{formatBrl(task.estimated_gmv_impact)}</div>
-        </div>
-        <div className="rounded-md bg-slate-50 p-3">
-          <div className="text-xs uppercase tracking-wide text-slate-400">inventory</div>
-          <div className="mt-1 text-sm font-semibold text-ink">{formatCount(task.estimated_inventory_impact)}</div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={task.href} className="inline-flex h-8 items-center rounded-md border border-line px-3 text-xs font-medium text-ink hover:bg-slate-50">
+            查看
+          </Link>
+          <Link href={task.href} className="inline-flex h-8 items-center rounded-md bg-forest px-3 text-xs font-semibold text-white hover:bg-teal-800">
+            处理
+          </Link>
         </div>
       </div>
 
-      <div className="mt-4 rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 text-slate-600">
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+        <span className="rounded-md bg-slate-50 px-2 py-1">利润影响 {formatBrl(task.estimated_profit_impact)}</span>
+        <span className="rounded-md bg-slate-50 px-2 py-1">销售影响 {formatBrl(task.estimated_gmv_impact)}</span>
+        <span className="rounded-md bg-slate-50 px-2 py-1">库存影响 {formatCount(task.estimated_inventory_impact)}</span>
+      </div>
+
+      <div className="mt-3 rounded-md border border-line bg-white px-3 py-2 text-sm leading-6 text-slate-600">
         建议动作：{task.suggested_action}
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -268,7 +281,7 @@ function TaskGroup({
   return (
     <section className="space-y-4">
       <SectionHeader eyebrow="任务队列" title={title} description={description} />
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="space-y-2">
         {tasks.map((task) => (
           <TaskCard key={task.task_id} task={task} />
         ))}
@@ -336,31 +349,26 @@ export default function TasksPage() {
   ];
 
   return (
-    <div className="space-y-10">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 今日任务 V1.5
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
-              </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                AI 只建议，不自动执行
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-                今日任务
-              </h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">今日任务</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这里把机会中心、数据分析、审批中心、利润中心、库存中心的数据收敛成今天要处理的任务。
-                老板打开系统后先看最重要的 5 件事，再按优先级进入对应页面人工处理。
+                把机会、利润、库存和审批事项收敛成今天要处理的任务，优先看最重要的 5 件事。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -387,15 +395,13 @@ export default function TasksPage() {
           title="先看今天任务压力和经营影响"
           description="总览用于快速判断今天任务量、优先级结构，以及这些任务对利润、GMV 和库存的预计影响。"
         />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-          <KpiCard label="total_tasks" value={formatCount(data.overview.total_tasks)} detail="今日生成的全部任务。" icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />} />
-          <KpiCard label="high_priority_tasks" value={formatCount(data.overview.high_priority_tasks)} detail="需要最先处理。" icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} tone="risk" />
-          <KpiCard label="medium_priority_tasks" value={formatCount(data.overview.medium_priority_tasks)} detail="进入正常处理队列。" icon={<Target className="h-5 w-5" aria-hidden="true" />} tone="warn" />
-          <KpiCard label="low_priority_tasks" value={formatCount(data.overview.low_priority_tasks)} detail="观察或低风险跟进。" icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />} />
-          <KpiCard label="estimated_profit_impact" value={formatBrl(data.overview.estimated_profit_impact)} detail="预计利润影响。" icon={<DollarSign className="h-5 w-5" aria-hidden="true" />} tone="good" />
-          <KpiCard label="estimated_gmv_impact" value={formatBrl(data.overview.estimated_gmv_impact)} detail="预计GMV影响。" icon={<LineChart className="h-5 w-5" aria-hidden="true" />} tone="good" />
-          <KpiCard label="estimated_inventory_impact" value={formatCount(data.overview.estimated_inventory_impact)} detail="预计库存影响。" icon={<Boxes className="h-5 w-5" aria-hidden="true" />} tone="warn" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard label="总任务" value={formatCount(data.overview.total_tasks)} detail="今日生成的全部任务。" icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />} />
+          <KpiCard label="高优先级" value={formatCount(data.overview.high_priority_tasks)} detail="需要最先处理。" icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} tone="risk" />
+          <KpiCard label="预计利润影响" value={formatBrl(data.overview.estimated_profit_impact)} detail="预计可保护或提升的利润。" icon={<DollarSign className="h-5 w-5" aria-hidden="true" />} tone="good" />
+          <KpiCard label="库存影响" value={formatCount(data.overview.estimated_inventory_impact)} detail="预计受影响的库存项。" icon={<Boxes className="h-5 w-5" aria-hidden="true" />} tone="warn" />
         </div>
+        <ColumnSettingsNote hiddenFields={["中优先级任务数", "低优先级任务数", "销售影响明细", "完整库存影响"]} />
       </section>
 
       <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
@@ -470,44 +476,44 @@ export default function TasksPage() {
         />
 
         <section className="rounded-lg border border-line bg-white shadow-panel">
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[1180px] text-left text-sm">
+          <div className="operator-scroll hidden lg:block">
+            <table className="operator-table text-left">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">排名</th>
-                  <th className="px-4 py-3">任务标题</th>
-                  <th className="px-4 py-3">任务类型</th>
-                  <th className="px-4 py-3">来源模块</th>
-                  <th className="px-4 py-3">影响类型</th>
-                  <th className="px-4 py-3">利润影响</th>
-                  <th className="px-4 py-3">GMV</th>
-                  <th className="px-4 py-3">库存影响</th>
-                  <th className="px-4 py-3">优先级</th>
-                  <th className="px-4 py-3">建议动作</th>
+                  <th>排名</th>
+                  <th>任务</th>
+                  <th>状态</th>
+                  <th>优先级</th>
+                  <th>利润影响</th>
+                  <th>处理入口</th>
                 </tr>
               </thead>
               <tbody>
                 {topTasks.map((task, index) => (
-                  <tr key={task.task_id} className="border-t border-line align-top">
-                    <td className="px-4 py-3 text-lg font-semibold text-ink">#{index + 1}</td>
-                    <td className="px-4 py-3">
+                  <tr key={task.task_id}>
+                    <td className="text-lg font-semibold text-ink">#{index + 1}</td>
+                    <td>
                       <Link href={task.href} className="font-semibold text-ink hover:text-forest">
                         {task.task_title}
                       </Link>
-                      <div className="mt-1 text-xs text-slate-500">{task.product_uid ?? "综合任务"}</div>
+                      <div className="mt-1 text-xs text-slate-500">{taskTypeLabel(task.task_type)} · {sourceModuleLabel(task.source_module)}</div>
                     </td>
-                    <td className="px-4 py-3">{taskTypeLabel(task.task_type)}</td>
-                    <td className="px-4 py-3">{sourceModuleLabel(task.source_module)}</td>
-                    <td className="px-4 py-3">{impactTypeLabel(task.impact_type)}</td>
-                    <td className="px-4 py-3 font-semibold text-ink">{formatBrl(task.estimated_profit_impact)}</td>
-                    <td className="px-4 py-3">{formatBrl(task.estimated_gmv_impact)}</td>
-                    <td className="px-4 py-3">{formatCount(task.estimated_inventory_impact)}</td>
-                    <td className="px-4 py-3">
+                    <td>
+                      <span className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium ${taskStatusBadge(task)}`}>
+                        {taskStatusLabel(task)}
+                      </span>
+                    </td>
+                    <td>
                       <span className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium ${priorityBadge(task.priority)}`}>
                         {priorityLabel(task.priority)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{task.suggested_action}</td>
+                    <td className="font-semibold text-ink">{formatBrl(task.estimated_profit_impact)}</td>
+                    <td>
+                      <Link href={task.href} className="inline-flex h-8 items-center rounded-md bg-forest px-3 text-xs font-semibold text-white">
+                        处理
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -628,7 +634,7 @@ export default function TasksPage() {
           <div>
             <h2 className="text-lg font-semibold text-ink">任务中心的边界</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              今日任务只负责把数据汇总成可处理任务。它不会连接真实平台 API，不会调用 OpenAI API，
+              今日任务只负责把数据汇总成可处理任务。它不会连接外部平台服务，不会调用外部智能服务，
               不会自动补货、自动调价、自动投广告或自动上架。所有建议都必须经过人工审批。
             </p>
           </div>

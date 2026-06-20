@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Command,
-  Database,
   Gauge,
   HeartPulse,
   LineChart,
@@ -20,6 +19,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import {
   emptyDailyOpsResponse,
   emptyDashboardResponse,
@@ -118,8 +118,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function sourceLabel(source: ApiDataSource | "unknown") {
-  if (source === "sqlite") return "真实数据";
-  return "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 async function readApi<T>(url: string, fallback: T): Promise<T> {
@@ -256,9 +255,6 @@ function CommandList({ items }: { items: CommandItem[] }) {
                 <span className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-semibold ${riskTone(item.risk_level)}`}>
                   {riskLabel(item.risk_level)}
                 </span>
-                <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-2 text-xs font-medium text-slate-600">
-                  {sourceModuleLabel(item.source)}
-                </span>
               </div>
               <h3 className="mt-3 text-base font-semibold text-ink">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p>
@@ -267,7 +263,7 @@ function CommandList({ items }: { items: CommandItem[] }) {
             <div className="text-right">
               <div className="text-xs text-slate-500">利润影响</div>
               <div className="mt-1 text-lg font-semibold text-ink">{currency(item.impact)}</div>
-              <div className="mt-2 text-xs text-slate-500">机会 {Math.round(item.opportunity_score)}</div>
+              <div className="mt-2 text-xs text-slate-500">处理入口</div>
             </div>
           </div>
         </Link>
@@ -305,7 +301,7 @@ export default function CommandCenterPage() {
       .filter((task) => task.estimated_profit_impact > 0)
       .map(taskToCommand);
     const coreGoals = state.dailyOps.core_goals.map(goalToCommand);
-    const mustDo = sortCommandItems([...coreGoals, ...highProfitTasks]).slice(0, 6);
+    const mustDo = sortCommandItems([...coreGoals, ...highProfitTasks]).slice(0, 5);
 
     const riskTasks = state.tasks.all_tasks
       .filter(
@@ -330,8 +326,8 @@ export default function CommandCenterPage() {
       .filter((item) => item.status === "fail")
       .map((item) => ({
         id: item.endpoint,
-        title: `接口异常：${item.endpoint}`,
-        summary: item.error ?? "接口返回失败，需要检查本地服务和数据源。",
+        title: "服务异常",
+        summary: item.error ?? "某项服务返回异常，需要进入系统健康查看问题编号。",
         href: "/system-health",
         source: "system_health",
         impact: 0,
@@ -339,7 +335,7 @@ export default function CommandCenterPage() {
         opportunity_score: 0,
         suggested_action: "查看系统健康中心",
       }));
-    const risks = sortCommandItems([...riskTasks, ...dailyRisks, ...systemRisks]).slice(0, 6);
+    const risks = sortCommandItems([...riskTasks, ...dailyRisks, ...systemRisks]).slice(0, 5);
 
     const ops = state.dailyOps.opportunities.map(opportunityToCommand);
     const dashboardOps = state.dashboard.dashboard_summary.opportunity_and_risk.top_opportunities.map(
@@ -368,7 +364,7 @@ export default function CommandCenterPage() {
         suggested_action: "建议只展示，不自动执行",
       }),
     );
-    const opportunities = sortCommandItems([...ops, ...dashboardOps, ...recommendations]).slice(0, 6);
+    const opportunities = sortCommandItems([...ops, ...dashboardOps, ...recommendations]).slice(0, 5);
 
     return { mustDo, risks, opportunities };
   }, [state]);
@@ -386,30 +382,25 @@ export default function CommandCenterPage() {
   const verificationAvailableLabel = verificationAvailable === "YES" ? "是" : "否";
 
   return (
-    <div className="space-y-10">
-      <section className="overflow-hidden rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
-                运营指挥中心 V1
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+                今日运营工作台
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                内部运营单入口
-              </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                不做 SaaS / 不做计费 / 不自动执行
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+                只做优先级汇总
               </span>
             </div>
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-                运营指挥中心
-              </h1>
-              <p className="max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
-                把运营总览、今日任务、每日运营、系统健康和验收状态收进一个控制台。
-                这里只帮助内部团队决定今天先处理什么，不新增商业化能力，不连接支付系统，不改变 Shopee店铺只读数据。
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">运营指挥中心</h1>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                把今天必须处理的风险、机会和执行队列压缩成一个工作台，所有动作仍需人工确认。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -429,12 +420,11 @@ export default function CommandCenterPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile label="必须处理" value={`${commandData.mustDo.length}`} detail="按利润、风险、机会排序。" icon={<Command className="h-5 w-5" aria-hidden="true" />} />
         <MetricTile label="高风险提醒" value={`${operating.high_risk_alert_count}`} detail={`断货风险 ${operating.stockout_risk_count}，低利润商品 ${operating.low_profit_product_count}。`} icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} />
         <MetricTile label="今日机会" value={`${operating.today_opportunity_count}`} detail={`高优先级建议 ${operating.high_priority_recommendation_count}。`} icon={<TrendingUp className="h-5 w-5" aria-hidden="true" />} />
-        <MetricTile label="系统健康" value={`${state.systemHealth.system_health_score}`} detail={`接口健康 ${percent(apiHealthRate)}，验收状态 ${verificationAvailableLabel}。`} icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />} />
-        <MetricTile label="数据源" value={sourceLabel(system.data_source)} detail={`数据库 ${sqliteAvailable ? "可用" : "不可用"}，测试数据已禁用。`} icon={<Database className="h-5 w-5" aria-hidden="true" />} />
+        <MetricTile label="系统状态" value={`${state.systemHealth.system_health_score}`} detail={`服务健康 ${percent(apiHealthRate)}，验收状态 ${verificationAvailableLabel}。`} icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />} />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-3">
@@ -471,23 +461,23 @@ export default function CommandCenterPage() {
           <SectionHeader
             eyebrow="系统健康"
             title="系统运行状态总览"
-            description="用于判断今天是否可以信任系统数据，以及是否存在接口或数据源异常。"
+            description="用于判断今天是否可以信任系统数据，以及是否存在服务或数据异常。"
           />
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-line bg-slate-50 p-4">
-              <div className="text-sm font-medium text-slate-600">接口健康</div>
+              <div className="text-sm font-medium text-slate-600">服务健康</div>
               <div className="mt-2 text-2xl font-semibold text-ink">{apiOkCount}/{apiTotal}</div>
               <div className="mt-1 text-xs text-slate-500">来自系统健康</div>
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
-              <div className="text-sm font-medium text-slate-600">数据库健康</div>
+              <div className="text-sm font-medium text-slate-600">数据连接</div>
               <div className="mt-2 text-2xl font-semibold text-ink">{sqliteAvailable ? "正常" : "未连接"}</div>
-              <div className="mt-1 text-xs text-slate-500">最近初始化 {formatDateTime(state.systemHealth.data_source_status.last_db_init_time)}</div>
+              <div className="mt-1 text-xs text-slate-500">最近检查 {formatDateTime(state.systemHealth.data_source_status.last_db_init_time)}</div>
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
-              <div className="text-sm font-medium text-slate-600">测试数据状态</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{mockRatio > 0 ? "异常" : "已禁用"}</div>
-              <div className="mt-1 text-xs text-slate-500">测试数据默认禁用</div>
+              <div className="text-sm font-medium text-slate-600">备用数据状态</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{mockRatio > 0 ? "需检查" : "未启用"}</div>
+              <div className="mt-1 text-xs text-slate-500">运营视图优先展示正式数据</div>
             </div>
             <div className="rounded-lg border border-line bg-slate-50 p-4">
               <div className="text-sm font-medium text-slate-600">数据更新时间</div>
@@ -533,7 +523,7 @@ export default function CommandCenterPage() {
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               本页使用轻量排序：利润影响权重最高，风险等级第二，机会分第三。排序仅用于内部排班和判断优先级，
-              不会创建执行动作，不会绕过审批，也不会调用任何平台写接口。
+              不会创建执行动作，不会绕过审批，也不会调用任何平台写入能力。
             </p>
           </div>
           <div className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-slate-50 px-3 text-xs font-medium text-slate-600">

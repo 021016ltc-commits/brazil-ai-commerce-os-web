@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { ProfitExperienceCharts } from "@/components/ProfitExperienceCharts";
+import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { emptyProfitResponse } from "@/data/emptyResponses";
 import { formatBrl, formatPercent } from "@/lib/format";
 import type { Platform, ProductProfitItem, ProfitApiResponse } from "@/types";
@@ -22,7 +23,7 @@ type SortKey = "net_profit" | "net_margin" | "revenue";
 const fallbackProfit: ProfitApiResponse = emptyProfitResponse;
 
 function sourceLabel(source: ProfitApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function sortLabel(sortBy: SortKey) {
@@ -107,55 +108,52 @@ export default function ProfitPage() {
 
   const snapshot = data.snapshot;
   const risk = data.profit_risk;
+  const topCostShare = data.cost_structure.reduce((max, item) => Math.max(max, item.share), 0);
+  const abnormalProfitCount = risk.loss_products + risk.low_profit_products + risk.high_risk_products;
 
   return (
-    <div className="space-y-8">
-      <ProfitExperienceCharts />
-
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel sm:p-6">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 利润中心 V1
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(data.source)}
-              </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                本地利润模型，不连接真实财务系统
               </span>
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">利润中心</h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">利润中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把利润结果、成本结构、利润风险和商品利润排行放到一个面板里，帮助你快速判断今天是先守利润、
-                先控成本，还是先盯亏损与低利润商品。它只展示真实业务数据，真实数据源不可用时显示空状态与连接提示。
+                先看利润是否健康，再决定今天控成本、保现金流，还是处理异常利润商品。
               </p>
             </div>
+            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">昨日净利润</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatBrl(snapshot.yesterday_net_profit)}</div>
-              <div className="mt-1 text-sm text-slate-500">按本地利润快照计算。</div>
-            </div>
-            <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">本月净利润</div>
+              <div className="text-xs text-slate-500">总利润</div>
               <div className="mt-2 text-2xl font-semibold text-forest">{formatBrl(snapshot.month_net_profit)}</div>
-              <div className="mt-1 text-sm text-slate-500">用于看本月利润空间是否健康。</div>
+              <div className="mt-1 text-xs text-slate-500">昨日 {formatBrl(snapshot.yesterday_net_profit)}</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">净利润率</div>
+              <div className="text-xs text-slate-500">利润率</div>
               <div className="mt-2 text-2xl font-semibold text-ink">{formatPercent(snapshot.net_margin, 1)}</div>
-              <div className="mt-1 text-sm text-slate-500">越能说明放量后承压能力越强。</div>
+              <div className="mt-1 text-xs text-slate-500">现金流 {formatBrl(snapshot.cash_flow)}</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">现金流</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatBrl(snapshot.cash_flow)}</div>
-              <div className="mt-1 text-sm text-slate-500">配合库存周转天数一起看安全性。</div>
+              <div className="text-xs text-slate-500">成本占比</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{formatPercent(topCostShare, 1)}</div>
+              <div className="mt-1 text-xs text-slate-500">最高单项成本占比</div>
+            </div>
+            <div className="rounded-lg border border-line bg-white/90 p-4">
+              <div className="text-xs text-slate-500">异常利润商品</div>
+              <div className="mt-2 text-2xl font-semibold text-coral">{abnormalProfitCount}</div>
+              <div className="mt-1 text-xs text-slate-500">亏损、低利润与高风险合计</div>
             </div>
           </div>
         </div>
@@ -206,6 +204,8 @@ export default function ProfitPage() {
           </article>
         </div>
       </section>
+
+      <ProfitExperienceCharts />
 
       <section className="space-y-5">
         <SectionHeader
@@ -334,45 +334,41 @@ export default function ProfitPage() {
             </div>
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1120px] text-left text-sm">
+          <div className="operator-scroll hidden md:block">
+            <table className="operator-table text-left">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">商品ID</th>
-                  <th className="px-4 py-3">商品名称</th>
-                  <th className="px-4 py-3">营收</th>
-                  <th className="px-4 py-3">成本</th>
-                  <th className="px-4 py-3">毛利润</th>
-                  <th className="px-4 py-3">净利润</th>
-                  <th className="px-4 py-3">净利润率</th>
+                  <th>商品</th>
+                  <th>销售额</th>
+                  <th>成本</th>
+                  <th>利润</th>
+                  <th>利润率</th>
+                  <th>状态</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProfitItems.map((item) => (
-                  <tr key={item.profit_item_id} className="border-t border-line align-top">
-                    <td className="px-4 py-3 font-medium text-ink">{item.product_uid}</td>
-                    <td className="px-4 py-3">
+                  <tr key={item.profit_item_id}>
+                    <td>
                       <div className="font-medium text-ink">{item.product_name}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {item.platform} / 库存 {item.inventory_days} 天
-                      </div>
+                      <div className="mt-1 text-xs text-slate-500">{item.platform}</div>
                     </td>
-                    <td className="px-4 py-3">{formatBrl(item.revenue)}</td>
-                    <td className="px-4 py-3">{formatBrl(item.cost)}</td>
-                    <td className="px-4 py-3">{formatBrl(item.gross_profit)}</td>
-                    <td className={`px-4 py-3 font-semibold ${item.net_profit < 0 ? "text-coral" : "text-forest"}`}>
+                    <td>{formatBrl(item.revenue)}</td>
+                    <td>{formatBrl(item.cost)}</td>
+                    <td className={`font-semibold ${item.net_profit < 0 ? "text-coral" : "text-forest"}`}>
                       {formatBrl(item.net_profit)}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-2">
-                        <div className="font-semibold text-ink">{formatPercent(item.net_margin, 1)}</div>
-                        <StatusPill status={item.risk_level} />
-                      </div>
+                    <td className="font-semibold text-ink">{formatPercent(item.net_margin, 1)}</td>
+                    <td>
+                      <StatusPill status={item.risk_level} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="px-5 py-4">
+            <ColumnSettingsNote hiddenFields={["商品编号", "毛利润", "库存天数", "平台明细", "利润记录编号"]} />
           </div>
 
           <div className="grid gap-3 p-4 md:hidden">

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { ActionsExperienceCharts } from "@/components/ModuleExperienceCharts";
+import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyActionHistoryResponse, emptyActionQueueResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
@@ -51,7 +52,7 @@ const initialForm: CreateFormState = {
 };
 
 function sourceLabel(source: ActionExecutionQueueApiResponse["source"]) {
-  return source === "sqlite" ? "真实数据" : "测试数据已禁用";
+  return dataStatusLabel(source);
 }
 
 function inputClass() {
@@ -146,6 +147,9 @@ export default function ActionsPage() {
   }
 
   async function decideAction(actionId: string, decision: "approve" | "reject") {
+    const ok = window.confirm(decision === "approve" ? "确认批准该执行申请？" : "确认驳回该执行申请？");
+    if (!ok) return;
+
     setBusyActionId(actionId);
     setMessage(null);
 
@@ -206,40 +210,29 @@ export default function ActionsPage() {
   ];
 
   return (
-    <div className="space-y-8">
-      <ActionsExperienceCharts />
-
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
+              <span className="inline-flex h-7 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
                 {zhCN.pageBadges.actions}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
                 {sourceLabel(queueData.source)}
               </span>
-              <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                模拟执行，不连接平台写 API
+              <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
+                模拟执行，不写入平台
               </span>
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-ink">执行中心</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-                所有 purchase、stock、price、ad、listing 动作必须先进入执行队列。
-                operator 可以发起，admin 可以审批，finance 只能审核成本类动作。
-                当前页面只做审批和模拟，不会自动下单、改价、上架或投放广告。
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">执行中心</h1>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                所有采购、库存、价格、广告和上架类动作必须先进入执行队列；本页只审批和模拟，不执行真实平台动作。
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void refreshData().catch(() => undefined)}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
-          >
-            <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-            刷新
-          </button>
+          <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems />
         </div>
       </section>
 
@@ -256,6 +249,16 @@ export default function ActionsPage() {
         ))}
       </section>
 
+      <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink">
+          查看执行图表
+          <span className="text-xs font-medium text-slate-500">模拟收益与队列结构</span>
+        </summary>
+        <div className="border-t border-line p-3">
+          <ActionsExperienceCharts />
+        </div>
+      </details>
+
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
           <div className="flex items-start justify-between gap-3">
@@ -265,7 +268,7 @@ export default function ActionsPage() {
               </div>
               <h2 className="mt-2 text-xl font-semibold text-ink">创建一个受控执行申请</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                申请只进入本地执行审批池，不会连接 Shopee 或任何平台写接口。
+                申请只进入执行审批池，不会连接 Shopee 或任何平台写入能力。
               </p>
             </div>
             <Plus className="h-5 w-5 text-forest" aria-hidden="true" />
@@ -427,7 +430,7 @@ export default function ActionsPage() {
                     className="inline-flex h-9 items-center gap-2 rounded-md bg-forest px-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    批准
+                    {busyActionId === item.action_id ? "处理中" : "批准"}
                   </button>
                   <button
                     type="button"
@@ -436,7 +439,7 @@ export default function ActionsPage() {
                     className="inline-flex h-9 items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-coral hover:bg-rose-100 disabled:opacity-60"
                   >
                     <XCircle className="h-4 w-4" aria-hidden="true" />
-                    拒绝
+                    {busyActionId === item.action_id ? "处理中" : "驳回"}
                   </button>
                 </div>
               </article>

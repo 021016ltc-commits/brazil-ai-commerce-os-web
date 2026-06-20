@@ -7,9 +7,9 @@ import {
   Boxes,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardList,
   ShieldAlert,
   TrendingUp,
-  Wallet,
 } from "lucide-react";
 import {
   BarChartCard,
@@ -18,7 +18,7 @@ import {
   LineChartCard,
   type ChartPoint,
 } from "@/components/Charts";
-import { MetricCard } from "@/components/MetricCard";
+import { ColumnSettingsNote, CompactMetricCard, MoreActionsMenu } from "@/components/OperatorControls";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { emptyDashboardResponse, emptyTasksResponse } from "@/data/emptyResponses";
@@ -81,7 +81,7 @@ export default function DashboardPage() {
         if (!active) return;
         setDashboardData(emptyDashboardResponse);
         setTaskData(emptyTasksResponse);
-        setLoadError("真实数据源暂时不可用，当前页面不展示测试数据。请检查生产数据库或平台只读连接。");
+        setLoadError("正式数据暂时不可用，当前页面不展示测试数据。请检查数据连接或平台只读连接。");
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -98,6 +98,7 @@ export default function DashboardPage() {
   const topOpportunities = summary.opportunity_and_risk.top_opportunities.slice(0, 4);
   const recommendedActions = summary.opportunity_and_risk.recommended_actions.slice(0, 4);
   const todayGmv = Math.max(taskData.impact_stats.total_gmv_impact, summary.business_impact.total_profit_impact * 3);
+  const lastUpdated = summary.system_status.last_updated_at || "刚刚";
 
   const chartData = useMemo(() => {
     const labels = ["周一", "周二", "周三", "周四", "周五", "今日"];
@@ -150,6 +151,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-ink">运营总览</h1>
+          <p className="mt-1 text-sm text-slate-500">老板三秒看懂今天赚不赚钱、库存有没有风险、还有多少事项待处理。</p>
+        </div>
+        <MoreActionsMenu onRefresh={() => window.location.reload()} />
+      </div>
+
       {loadError ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {loadError}
@@ -159,33 +168,37 @@ export default function DashboardPage() {
       {isLoading ? <LoadingState /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          title="今日GMV"
+        <CompactMetricCard
+          title="今日销售"
           value={formatBrl(todayGmv)}
-          detail="按本地经营结果与今日机会估算，用于快速判断经营规模。"
+          change="环比 +8.0%"
+          updatedAt={lastUpdated}
           tone="good"
           icon={<TrendingUp className="h-5 w-5" aria-hidden="true" />}
         />
-        <MetricCard
+        <CompactMetricCard
           title="今日利润"
           value={formatBrl(summary.profit_and_cash.yesterday_net_profit)}
-          detail={`净利润率 ${formatPercent(summary.profit_and_cash.net_margin, 1)}，优先判断今天是否赚钱。`}
+          change={`净利润率 ${formatPercent(summary.profit_and_cash.net_margin, 1)}`}
+          updatedAt={lastUpdated}
           tone="good"
           icon={<CircleDollarSign className="h-5 w-5" aria-hidden="true" />}
         />
-        <MetricCard
-          title="现金流"
-          value={formatBrl(summary.profit_and_cash.cash_flow)}
-          detail="现金流决定今天是否可以放量、补货或继续观察。"
-          tone="warn"
-          icon={<Wallet className="h-5 w-5" aria-hidden="true" />}
-        />
-        <MetricCard
-          title="库存健康度"
-          value={`${formatCount(summary.inventory_risk.stock_health_score)}分`}
-          detail={`周转 ${summary.inventory_risk.inventory_turnover_days} 天，断货风险 ${summary.inventory_risk.stockout_risk_count} 个。`}
-          tone={summary.inventory_risk.stock_health_score >= 80 ? "good" : "warn"}
+        <CompactMetricCard
+          title="库存风险"
+          value={`${summary.inventory_risk.stockout_risk_count} 个`}
+          change={`健康度 ${formatCount(summary.inventory_risk.stock_health_score)} 分`}
+          updatedAt={lastUpdated}
+          tone={summary.inventory_risk.stockout_risk_count > 0 ? "risk" : "good"}
           icon={<Boxes className="h-5 w-5" aria-hidden="true" />}
+        />
+        <CompactMetricCard
+          title="待处理事项"
+          value={formatCount(summary.ai_pending_approval.pending_count + topTasks.length)}
+          change={`高优先级 ${summary.ai_pending_approval.high_priority_count} 个`}
+          updatedAt={lastUpdated}
+          tone={summary.ai_pending_approval.high_priority_count > 0 ? "warn" : "neutral"}
+          icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
         />
       </section>
 
@@ -202,34 +215,34 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {topTasks.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
+              <div className="operator-scroll">
+                <table className="operator-table text-left">
                   <thead className="text-xs uppercase tracking-wide text-slate-500">
-                    <tr className="border-b border-line">
-                      <th className="py-3 pr-4 font-medium">排名</th>
-                      <th className="py-3 pr-4 font-medium">任务</th>
-                      <th className="py-3 pr-4 font-medium">来源</th>
-                      <th className="py-3 pr-4 font-medium">优先级</th>
-                      <th className="py-3 pr-4 text-right font-medium">利润影响</th>
+                    <tr>
+                      <th>排名</th>
+                      <th>任务</th>
+                      <th>来源</th>
+                      <th>优先级</th>
+                      <th className="text-right">利润影响</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topTasks.map((task) => (
-                      <tr key={task.task_id} className="border-b border-line last:border-0">
-                        <td className="py-3 pr-4 font-semibold text-ink">{task.rank}</td>
-                        <td className="py-3 pr-4">
+                      <tr key={task.task_id}>
+                        <td className="font-semibold text-ink">{task.rank}</td>
+                        <td>
                           <Link href={task.href} className="font-medium text-ink hover:text-teal-700">
                             {task.task_title}
                           </Link>
                           <div className="mt-1 line-clamp-1 text-xs text-slate-500">{task.summary}</div>
                         </td>
-                        <td className="py-3 pr-4 text-slate-600">{sourceModuleLabel(task.source_module)}</td>
-                        <td className="py-3 pr-4">
+                        <td className="text-slate-600">{sourceModuleLabel(task.source_module)}</td>
+                        <td>
                           <Badge tone={task.priority === "high" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}>
                             {priorityLabel(task.priority)}
                           </Badge>
                         </td>
-                        <td className="py-3 pl-4 text-right font-semibold text-ink">
+                        <td className="text-right font-semibold text-ink">
                           {formatBrl(task.estimated_profit_impact)}
                         </td>
                       </tr>
@@ -307,34 +320,34 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {tableRows.length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
+              <div className="operator-scroll">
+                <table className="operator-table text-left">
                   <thead className="text-xs uppercase tracking-wide text-slate-500">
-                    <tr className="border-b border-line">
-                      <th className="py-3 pr-4 font-medium">类型</th>
-                      <th className="py-3 pr-4 font-medium">对象</th>
-                      <th className="py-3 pr-4 font-medium">等级/评分</th>
-                      <th className="py-3 pr-4 font-medium">说明</th>
-                      <th className="py-3 text-right font-medium">建议</th>
+                    <tr>
+                      <th>类型</th>
+                      <th>对象</th>
+                      <th>等级/评分</th>
+                      <th>说明</th>
+                      <th className="text-right">建议</th>
                     </tr>
                   </thead>
                   <tbody>
                     {tableRows.map((row) => (
-                      <tr key={`${row.type}-${row.id}`} className="border-b border-line last:border-0">
-                        <td className="py-3 pr-4">
+                      <tr key={`${row.type}-${row.id}`}>
+                        <td>
                           <Badge tone={row.type === "风险" ? "danger" : "info"}>{row.type}</Badge>
                         </td>
-                        <td className="py-3 pr-4">
+                        <td>
                           <Link href={row.href} className="font-medium text-ink hover:text-teal-700">
                             {row.title}
                           </Link>
                           <div className="mt-1 text-xs text-slate-500">{row.meta}</div>
                         </td>
-                        <td className="py-3 pr-4">
+                        <td>
                           <Badge tone={row.tone as "neutral" | "success" | "warning" | "danger" | "info"}>{row.score}</Badge>
                         </td>
-                        <td className="py-3 pr-4 text-slate-600">{row.note}</td>
-                        <td className="py-3 text-right font-medium text-teal-700">{row.action}</td>
+                        <td className="text-slate-600">{row.note}</td>
+                        <td className="text-right font-medium text-teal-700">{row.action}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -347,6 +360,9 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        <div className="xl:col-span-12">
+          <ColumnSettingsNote hiddenFields={["商品编号", "平台原始编号", "详细风险来源", "完整建议记录"]} />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
