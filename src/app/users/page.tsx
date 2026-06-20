@@ -508,7 +508,7 @@ export default function UsersPage() {
         </section>
       </section>
 
-      <section className="space-y-5">
+      <section id="operation-logs" className="space-y-5">
         <SectionHeader
           eyebrow="操作日志"
           title="登录、退出、审批、用户创建与修改"

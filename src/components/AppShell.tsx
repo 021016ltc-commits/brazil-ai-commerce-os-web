@@ -5,14 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   BarChart3,
+  Bell,
   Boxes,
   Building2,
   CalendarCheck,
+  CircleHelp,
   CheckSquare,
   ClipboardCheck,
+  ClipboardList,
   Command,
   HeartPulse,
-  LayoutDashboard,
   LineChart,
   ListTodo,
   LogIn,
@@ -20,14 +22,16 @@ import {
   Menu,
   RefreshCcw,
   Search,
+  Settings,
   ShieldCheck,
   SlidersHorizontal,
   ShoppingBag,
+  UserCircle,
   Users,
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { QuickActions } from "@/components/QuickActions";
@@ -40,7 +44,6 @@ const navGroups = [
   {
     label: "运营",
     items: [
-      { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
       { href: "/command-center", key: "commandCenter", icon: Command },
       { href: "/daily-ops", key: "dailyOps", icon: CalendarCheck },
       { href: "/tasks", key: "tasks", icon: ListTodo },
@@ -64,11 +67,13 @@ const navGroups = [
       { href: "/approvals", key: "approvals", icon: CheckSquare },
       { href: "/actions", key: "actions", icon: ShieldCheck },
       { href: "/shopee", key: "shopee", icon: ShoppingBag },
-      { href: "/verification", key: "verification", icon: ClipboardCheck },
     ],
   },
+] as const;
+
+const settingsGroups = [
   {
-    label: "系统",
+    label: "系统管理",
     items: [
       { href: "/users", key: "users", icon: Users },
       { href: "/tenants", key: "tenants", icon: Building2 },
@@ -76,7 +81,19 @@ const navGroups = [
       { href: "/system", key: "system", icon: Activity },
     ],
   },
+  {
+    label: "系统验证",
+    items: [{ href: "/verification", key: "verification", icon: ClipboardCheck }],
+  },
+  {
+    label: "更多工具",
+    items: [{ href: "/users#operation-logs", label: "操作日志", icon: ClipboardList }],
+  },
 ] as const;
+
+function routePath(href: string) {
+  return href.split("#")[0];
+}
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -84,7 +101,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="space-y-5 px-3 py-4">
-      {navGroups.map((group) => (
+      {navGroups.filter((group) => group.items.length > 0).map((group) => (
         <div key={group.label} className="space-y-1">
           <div className="px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             {group.label}
@@ -113,6 +130,121 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       ))}
     </nav>
+  );
+}
+
+function SettingsMenu({
+  currentUser,
+  onLogout,
+}: {
+  currentUser: UserItem | null;
+  onLogout: () => void;
+}) {
+  const pathname = usePathname();
+  const { dictionary } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <Button
+        type="button"
+        variant="ghost"
+        className={`h-10 w-10 border px-0 ${open ? "border-teal-200 bg-teal-50 text-teal-800" : "border-line bg-white"}`}
+        aria-label="打开设置菜单"
+        title="设置"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Settings className="h-5 w-5" aria-hidden="true" />
+      </Button>
+
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-lg border border-line bg-white py-2 shadow-lg"
+        >
+          {settingsGroups.map((group) => (
+            <div key={group.label} className="border-b border-line py-2 last:border-b-0">
+              <div className="px-4 pb-1 text-xs font-semibold text-indigo-700">{group.label}</div>
+              <div className="space-y-1 px-2">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const itemPath = routePath(item.href);
+                  const active = pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+                  const label = "label" in item ? item.label : dictionary.nav[item.key];
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      role="menuitem"
+                      onClick={() => setOpen(false)}
+                      className={`flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
+                        active ? "bg-teal-50 text-teal-800" : "text-slate-700 hover:bg-slate-50 hover:text-ink"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div className="px-2 py-2">
+            {currentUser ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onLogout();
+                }}
+                className="flex min-h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-medium text-red-600 transition hover:bg-red-50"
+              >
+                <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>退出登录</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>登录</span>
+              </Link>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -145,6 +277,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const canAccessCurrentPage = userCanAccessPath(currentUser, pathname);
+  const handleLogout = () => {
+    if (currentUser) {
+      void fetch("/api/operation-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action_type: "logout",
+          actor_user_id: currentUser.user_id,
+          actor_email: currentUser.email,
+          target_type: "session",
+          target_id: "local_session",
+          summary: `${currentUser.display_name} 退出本地系统。`,
+        }),
+      }).catch(() => undefined);
+    }
+
+    clearLocalUser();
+    router.push("/login");
+  };
 
   return (
     <div className="min-h-screen bg-mist text-ink">
@@ -204,10 +355,31 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="hidden sm:block">
                 <LanguageSwitcher compact />
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="hidden h-10 w-10 border border-line bg-white px-0 text-slate-600 sm:inline-flex"
+                aria-label="通知"
+                title="通知"
+              >
+                <Bell className="h-5 w-5" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="hidden h-10 w-10 border border-line bg-white px-0 text-slate-600 sm:inline-flex"
+                aria-label="帮助"
+                title="帮助"
+              >
+                <CircleHelp className="h-5 w-5" aria-hidden="true" />
+              </Button>
+              <SettingsMenu currentUser={currentUser} onLogout={handleLogout} />
               {currentUser ? (
-                <div className="rounded-md border border-line bg-white px-3 py-2 text-xs text-slate-600 shadow-panel">
-                  <span className="font-semibold text-ink">{currentUser.display_name}</span>
-                  <span className="ml-2">{currentUser.roles.map((role) => roleLabels[role]).join(" / ")}</span>
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-slate-50 text-slate-600"
+                  title={`${currentUser.display_name} / ${currentUser.roles.map((role) => roleLabels[role]).join(" / ")}`}
+                >
+                  <UserCircle className="h-6 w-6" aria-hidden="true" />
                 </div>
               ) : (
                 <Link
@@ -218,31 +390,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   登录
                 </Link>
               )}
-              {currentUser ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    void fetch("/api/operation-logs", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        action_type: "logout",
-                        actor_user_id: currentUser.user_id,
-                        actor_email: currentUser.email,
-                        target_type: "session",
-                        target_id: "local_session",
-                        summary: `${currentUser.display_name} 退出本地系统。`,
-                      }),
-                    }).catch(() => undefined);
-                    clearLocalUser();
-                    router.push("/login");
-                  }}
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                  退出
-                </Button>
-              ) : null}
             </div>
           </div>
         </header>
