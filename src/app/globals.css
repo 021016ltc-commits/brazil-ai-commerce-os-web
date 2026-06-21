@@ -264,6 +264,62 @@ textarea {
   animation: login-grid-shift 18s linear infinite;
 }
 
+.interactive-commerce-visual {
+  --spotlight-x: 58%;
+  --spotlight-y: 38%;
+}
+
+.commerce-cursor-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at var(--spotlight-x) var(--spotlight-y), rgba(45, 212, 191, 0.32), rgba(45, 212, 191, 0.08) 18%, transparent 38%);
+  transition: background 120ms ease;
+}
+
+.commerce-orbit {
+  position: absolute;
+  border: 1px solid rgba(94, 234, 212, 0.16);
+  border-radius: 999px;
+  box-shadow: inset 0 0 30px rgba(20, 184, 166, 0.08);
+}
+
+.commerce-orbit::before {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #5eead4;
+  box-shadow: 0 0 24px rgba(94, 234, 212, 0.8);
+  content: "";
+}
+
+.commerce-orbit-a {
+  right: -90px;
+  top: 14%;
+  width: 360px;
+  height: 360px;
+  animation: commerce-orbit-spin 14s linear infinite;
+}
+
+.commerce-orbit-a::before {
+  right: 72px;
+  top: 18px;
+}
+
+.commerce-orbit-b {
+  bottom: -120px;
+  left: 8%;
+  width: 520px;
+  height: 520px;
+  animation: commerce-orbit-spin-reverse 22s linear infinite;
+}
+
+.commerce-orbit-b::before {
+  left: 118px;
+  top: 30px;
+}
+
 .login-panel {
   position: absolute;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -379,6 +435,24 @@ textarea {
   }
   50% {
     opacity: 0.85;
+  }
+}
+
+@keyframes commerce-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes commerce-orbit-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
   }
 }
 
