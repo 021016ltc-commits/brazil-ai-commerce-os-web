@@ -11,13 +11,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
     | {
         user_id?: string;
+        account?: string;
         password?: string;
       }
     | null;
 
-  if (!body?.user_id || !body.password) {
+  if (!(body?.account || body?.user_id) || !body.password) {
     return NextResponse.json(
-      { tenant_id: tenantId, error: "请选择用户并输入密码。" },
+      { tenant_id: tenantId, error: "请输入账号和密码。" },
       { status: 400 },
     );
   }
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     const result = await withTenant(tenantId, () =>
       dataService.loginUser({
         user_id: body.user_id,
+        account: body.account,
         password: body.password,
       }),
     );

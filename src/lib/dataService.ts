@@ -419,7 +419,7 @@ export const dataService = {
     return updateLocalUser(params);
   },
 
-  loginUser(params: { user_id?: string; password?: string }) {
+  loginUser(params: { user_id?: string; account?: string; password?: string }) {
     return authenticateLocalUser(params);
   },
 

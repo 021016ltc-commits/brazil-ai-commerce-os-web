@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomUUID, timingSafeEqual } from "node:crypto";
+﻿import { pbkdf2Sync, randomUUID, timingSafeEqual } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import {
   operationLogMock,
@@ -861,18 +861,22 @@ export async function updateLocalUser(params: {
 
 export async function authenticateLocalUser(params: {
   user_id?: string;
+  account?: string;
   password?: string;
 }): Promise<{ source: UsersApiResponse["source"]; user: UserItem; redirect_to: string; message: string }> {
-  const userId = params.user_id?.trim();
+  const account = params.account?.trim() || params.user_id?.trim();
   const password = params.password ?? "";
 
-  if (!userId || !password) {
-    throw new Error("请选择用户并输入密码。");
+  if (!account || !password) {
+    throw new Error("请输入账号和密码。");
   }
+
+  const matchesAccount = (item: UserItem) =>
+    item.user_id === account || item.email === account || item.display_name === account;
 
   if (shouldUseMockData()) {
     const fallback = defaultTenantUserFallback();
-    const user = fallback.users.find((item) => item.user_id === userId);
+    const user = fallback.users.find(matchesAccount);
     if (!user || !verifyPassword(password, defaultInternalAdmin.password_hash, defaultInternalAdmin.password_salt)) {
       throw new Error("账号或密码不正确。");
     }
@@ -890,11 +894,11 @@ export async function authenticateLocalUser(params: {
           `SELECT user_id, email, display_name, status, default_role, last_login_at,
                   created_at, updated_at, password_hash, password_salt, password_algorithm
              FROM users
-            WHERE user_id = ?
-              AND status = 'active'
+            WHERE status = 'active'
+              AND (user_id = ? OR email = ? OR display_name = ?)
             LIMIT 1`,
         )
-        .get(userId) as UserAuthRow | undefined;
+        .get(account, account, account) as UserAuthRow | undefined;
 
       if (!row || !verifyPassword(password, row.password_hash, row.password_salt)) {
         throw new Error("账号或密码不正确。");
@@ -924,7 +928,7 @@ export async function authenticateLocalUser(params: {
     return { source: response.source, user, redirect_to: "/dashboard", message: "登录成功。" };
   } catch (error) {
     const fallback = defaultTenantUserFallback();
-    const fallbackUser = fallback.users.find((item) => item.user_id === userId);
+    const fallbackUser = fallback.users.find(matchesAccount);
     if (fallbackUser && verifyPassword(password, defaultInternalAdmin.password_hash, defaultInternalAdmin.password_salt)) {
       return { source: fallback.source, user: fallbackUser, redirect_to: "/dashboard", message: "登录成功。" };
     }

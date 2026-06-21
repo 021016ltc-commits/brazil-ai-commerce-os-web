@@ -2,77 +2,151 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogIn, ShieldCheck } from "lucide-react";
-import { emptyUsersResponse } from "@/data/emptyResponses";
-import { resourceLabels, roleLabels, storeLocalUser } from "@/lib/permissions";
-import type { UserItem, UsersApiResponse } from "@/types";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, LogIn, ShieldCheck, UserRound, X } from "lucide-react";
+import { readStoredUser, storeLocalUser } from "@/lib/permissions";
+import type { UserItem } from "@/types";
 
-const fallbackUsers: UsersApiResponse = emptyUsersResponse;
+type RememberedAccount = {
+  account: string;
+  password?: string;
+  updated_at: string;
+};
 
-function permissionLabel(permission: string) {
-  const [resource, action] = permission.split(":");
-  const actionLabels: Record<string, string> = {
-    view: "查看",
-    approve: "审批",
-    manage: "管理",
+const rememberedAccountsKey = "baico_remembered_accounts";
+
+function readRememberedAccounts(): RememberedAccount[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(rememberedAccountsKey);
+    const parsed = raw ? (JSON.parse(raw) as RememberedAccount[]) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => item.account) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRememberedAccount(account: string, password: string, rememberPassword: boolean) {
+  if (typeof window === "undefined") return;
+
+  const nextAccount = account.trim();
+  if (!nextAccount) return;
+
+  const existing = readRememberedAccounts().filter((item) => item.account !== nextAccount);
+  const next: RememberedAccount = {
+    account: nextAccount,
+    password: rememberPassword ? password : undefined,
+    updated_at: new Date().toISOString(),
   };
-  return `${resourceLabels[resource as keyof typeof resourceLabels] ?? resource} / ${actionLabels[action] ?? action}`;
+
+  window.localStorage.setItem(rememberedAccountsKey, JSON.stringify([next, ...existing].slice(0, 5)));
+}
+
+function LoginVisual() {
+  const metrics = [
+    { label: "今日销售", value: "R$ 128K" },
+    { label: "库存健康", value: "86" },
+    { label: "待处理", value: "12" },
+  ];
+
+  return (
+    <section className="relative hidden min-h-screen overflow-hidden bg-[#052f2c] text-white lg:block">
+      <div className="login-grid-motion absolute inset-0 opacity-70" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(20,184,166,0.18),transparent_32%),linear-gradient(135deg,rgba(15,118,110,0.26),transparent_42%)]" />
+
+      <div className="relative z-10 flex min-h-screen flex-col justify-between p-12">
+        <div>
+          <div className="inline-flex h-9 items-center rounded-md border border-white/20 bg-white/10 px-3 text-xs font-semibold tracking-[0.2em] text-teal-100">
+            BRAZIL AI COMMERCE OS
+          </div>
+          <h1 className="mt-8 max-w-xl text-5xl font-semibold leading-tight tracking-tight">
+            真实店铺数据驱动的内部运营系统
+          </h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-teal-50/80">
+            统一查看店铺授权、订单、商品、库存和每日运营事项，让人工运营更快判断今天该先处理什么。
+          </p>
+        </div>
+
+        <div className="relative h-[360px]">
+          <div className="login-route login-route-a" />
+          <div className="login-route login-route-b" />
+          <div className="login-route login-route-c" />
+
+          <div className="login-panel login-panel-primary">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-teal-50">店铺数据</span>
+              <span className="rounded-md bg-emerald-400/15 px-2 py-1 text-xs text-emerald-100">只读保护</span>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              {metrics.map((item) => (
+                <div key={item.label} className="rounded-md border border-white/10 bg-white/10 p-3">
+                  <div className="text-xs text-teal-50/70">{item.label}</div>
+                  <div className="mt-2 text-lg font-semibold">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="login-panel login-panel-secondary">
+            <div className="text-sm font-semibold text-teal-50">今日必须处理</div>
+            <div className="mt-4 space-y-3">
+              {["库存风险 SKU-021", "利润异常 SKU-005", "待审批动作 8 项"].map((item, index) => (
+                <div key={item} className="flex items-center justify-between rounded-md border border-white/10 bg-white/10 px-3 py-2">
+                  <span className="text-sm text-teal-50/85">{item}</span>
+                  <span className="text-xs text-teal-100">P{index + 1}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="login-panel login-panel-mini">
+            <ShieldCheck className="h-5 w-5 text-emerald-200" aria-hidden="true" />
+            <div>
+              <div className="text-sm font-semibold">审批后执行</div>
+              <div className="text-xs text-teal-50/70">不自动改价、不自动上架</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function LoginPage() {
   const router = useRouter();
-  const [data, setData] = useState<UsersApiResponse>(fallbackUsers);
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [isLoginOpen, setIsLoginOpen] = useState(true);
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [rememberAccount, setRememberAccount] = useState(true);
+  const [rememberPassword, setRememberPassword] = useState(false);
+  const [rememberedAccounts, setRememberedAccounts] = useState<RememberedAccount[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadError, setLoadError] = useState("");
   const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setLoadError("");
+    const remembered = readRememberedAccounts();
+    const storedUser = readStoredUser();
+    setRememberedAccounts(remembered);
 
-    fetch("/api/users", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: UsersApiResponse) => {
-        if (!active) return;
-        setData(payload);
-        setSelectedUserId("");
-      })
-      .catch(() => {
-        if (!active) return;
-        setData(fallbackUsers);
-        setLoadError("用户列表加载失败，请检查初始化数据或联系管理员。");
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    if (remembered[0]) {
+      setAccount(remembered[0].account);
+      setPassword(remembered[0].password ?? "");
+      setRememberPassword(Boolean(remembered[0].password));
+    } else if (storedUser) {
+      setAccount(storedUser.email || storedUser.display_name || "");
+    }
   }, []);
 
-  const activeUsers = useMemo(
-    () => data.users.filter((user) => user.status === "active"),
-    [data.users],
+  const selectedRememberedAccount = useMemo(
+    () => rememberedAccounts.find((item) => item.account === account),
+    [account, rememberedAccounts],
   );
-  const selectedUser = useMemo<UserItem | undefined>(
-    () => activeUsers.find((user) => user.user_id === selectedUserId),
-    [activeUsers, selectedUserId],
-  );
-  const internalAdminReady = activeUsers.some(
-    (user) => user.display_name === "楼天城" && user.roles.includes("admin"),
-  );
-  const emptyMessage = !isLoading && activeUsers.length === 0
-    ? "未找到可用用户，请联系管理员或检查初始化数据"
-    : "";
-  const canLogin = Boolean(selectedUser && password.trim() && !isLoading && !isSubmitting);
+
+  const canLogin = Boolean(account.trim() && password.trim() && !isSubmitting);
 
   async function handleLogin() {
-    if (!canLogin || !selectedUser) return;
+    if (!canLogin) return;
     setIsSubmitting(true);
     setLoginError("");
 
@@ -81,7 +155,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: selectedUser.user_id,
+          account: account.trim(),
           password,
         }),
       });
@@ -95,6 +169,9 @@ export default function LoginPage() {
       }
 
       storeLocalUser(payload.user);
+      if (rememberAccount) {
+        writeRememberedAccount(account, password, rememberPassword);
+      }
       router.push(payload.redirect_to ?? "/dashboard");
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "账号或密码不正确。");
@@ -103,115 +180,164 @@ export default function LoginPage() {
     }
   }
 
+  function selectRememberedAccount(value: string) {
+    const next = rememberedAccounts.find((item) => item.account === value);
+    setAccount(value);
+    setPassword(next?.password ?? "");
+    setRememberPassword(Boolean(next?.password));
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="w-full max-w-2xl rounded-lg border border-line bg-white p-6 shadow-panel">
-        <div className="mb-6">
-          <div className="text-sm font-semibold uppercase tracking-wide text-forest">
-            Brazil AI Commerce OS
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold text-ink">本地用户登录</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            选择一个本地用户进入系统。当前版本不接第三方登录，不接微信、Google 或真实身份服务。
-          </p>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-slate-50">
+      <LoginVisual />
 
-        <div className="space-y-4">
-          {isLoading ? (
-            <div className="rounded-lg border border-line bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              正在加载可用用户...
-            </div>
-          ) : null}
-          {internalAdminReady ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-forest">
-              已准备内部管理员账号
-            </div>
-          ) : null}
-          {loadError ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {loadError}
-            </div>
-          ) : null}
-          {emptyMessage ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {emptyMessage}
-            </div>
-          ) : null}
-          {loginError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {loginError}
-            </div>
-          ) : null}
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">本地用户</span>
-            <select
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              disabled={isLoading || activeUsers.length === 0}
-              className="mt-1 h-11 w-full rounded-md border border-line bg-white px-3 outline-none focus:border-forest"
+      <div className="absolute inset-0 lg:left-[58%]">
+        <div className="flex min-h-screen flex-col justify-between px-5 py-5 sm:px-8">
+          <header className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setIsLoginOpen(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-slate-50"
             >
-              <option value="">请选择用户</option>
-              {activeUsers.map((user) => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.display_name} / {user.email} / {user.roles.map((role) => roleLabels[role]).join("、")}
-                </option>
-              ))}
-            </select>
-          </label>
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              注册/登录
+            </button>
+          </header>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">登录密码</span>
-            <input
-              className="mt-1 h-11 w-full rounded-md border border-line px-3 outline-none focus:border-forest"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="请输入密码"
-              type="password"
-              autoComplete="current-password"
-            />
-          </label>
+          <section className="mx-auto w-full max-w-md rounded-lg border border-line bg-white/90 p-5 shadow-sm backdrop-blur lg:hidden">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-forest">Brazil AI Commerce OS</div>
+            <h1 className="mt-3 text-3xl font-semibold text-ink">智采内部运营系统</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-500">点击右上角“注册/登录”进入系统。</p>
+          </section>
 
-          {selectedUser ? (
-            <div className="rounded-lg border border-line bg-slate-50 p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-1 h-5 w-5 text-forest" aria-hidden="true" />
-                <div>
-                  <div className="text-sm font-semibold text-ink">{selectedUser.display_name}</div>
-                  <div className="mt-1 text-sm text-slate-600">
-                    角色：{selectedUser.roles.map((role) => roleLabels[role]).join(" / ")}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedUser.permissions.slice(0, 10).map((permission) => (
-                      <span
-                        key={permission}
-                        className="inline-flex h-7 items-center rounded-md border border-line bg-white px-2 text-xs text-slate-600"
-                      >
-                        {permissionLabel(permission)}
-                      </span>
-                    ))}
-                    {selectedUser.permissions.length > 10 ? (
-                      <span className="inline-flex h-7 items-center rounded-md border border-line bg-white px-2 text-xs text-slate-600">
-                        +{selectedUser.permissions.length - 10}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => void handleLogin()}
-            disabled={!canLogin}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-forest px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            {isSubmitting ? "登录中" : "进入运营总览"}
-          </button>
+          <footer className="hidden text-right text-xs text-slate-400 lg:block">
+            真实店铺数据 · 人工审批 · 只读保护
+          </footer>
         </div>
-      </section>
-    </div>
+      </div>
+
+      {isLoginOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-950/20 px-4 py-5 backdrop-blur-sm sm:px-6">
+          <div className="ml-auto flex h-full max-w-[440px] items-start pt-16 sm:pt-20">
+            <section className="w-full rounded-lg border border-line bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-forest">
+                    Brazil AI Commerce OS
+                  </div>
+                  <h1 className="mt-2 text-2xl font-semibold text-ink">智采内部运营系统</h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLoginOpen(false)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line text-slate-500 hover:bg-slate-50"
+                  aria-label="关闭登录窗口"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {rememberedAccounts.length > 0 ? (
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">已记住账号</span>
+                    <select
+                      value={selectedRememberedAccount?.account ?? ""}
+                      onChange={(event) => selectRememberedAccount(event.target.value)}
+                      className="mt-1 h-10 w-full rounded-md border border-line bg-white px-3 text-sm outline-none focus:border-forest"
+                    >
+                      <option value="">选择本机账号</option>
+                      {rememberedAccounts.map((item) => (
+                        <option key={item.account} value={item.account}>
+                          {item.account}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">账号</span>
+                  <div className="mt-1 flex h-11 items-center gap-2 rounded-md border border-line bg-white px-3 focus-within:border-forest">
+                    <UserRound className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    <input
+                      className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
+                      value={account}
+                      onChange={(event) => setAccount(event.target.value)}
+                      placeholder="请输入账号"
+                      autoComplete="username"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">密码</span>
+                  <div className="mt-1 flex h-11 items-center gap-2 rounded-md border border-line bg-white px-3 focus-within:border-forest">
+                    <LockKeyhole className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    <input
+                      className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="请输入密码"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void handleLogin();
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="inline-flex h-8 w-8 items-center justify-center text-slate-500 hover:text-ink"
+                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                  </div>
+                </label>
+
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={rememberAccount}
+                      onChange={(event) => setRememberAccount(event.target.checked)}
+                      className="h-4 w-4 accent-teal-700"
+                    />
+                    记住账号
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={rememberPassword}
+                      disabled={!rememberAccount}
+                      onChange={(event) => setRememberPassword(event.target.checked)}
+                      className="h-4 w-4 accent-teal-700 disabled:opacity-40"
+                    />
+                    记住密码
+                  </label>
+                </div>
+
+                {loginError ? (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {loginError}
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => void handleLogin()}
+                  disabled={!canLogin}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-forest px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isSubmitting ? "登录中" : "注册/登录"}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : null}
+    </main>
   );
 }

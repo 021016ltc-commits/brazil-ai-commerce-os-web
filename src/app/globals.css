@@ -256,6 +256,132 @@ textarea {
   }
 }
 
+.login-grid-motion {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: login-grid-shift 18s linear infinite;
+}
+
+.login-panel {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.login-panel-primary {
+  left: 4%;
+  top: 26px;
+  width: min(520px, 76%);
+  padding: 18px;
+  animation: login-float-a 7s ease-in-out infinite;
+}
+
+.login-panel-secondary {
+  bottom: 20px;
+  right: 8%;
+  width: min(380px, 58%);
+  padding: 18px;
+  animation: login-float-b 8s ease-in-out infinite;
+}
+
+.login-panel-mini {
+  left: 16%;
+  bottom: 58px;
+  display: flex;
+  width: 260px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  animation: login-float-c 6s ease-in-out infinite;
+}
+
+.login-route {
+  position: absolute;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(94, 234, 212, 0.8), transparent);
+  transform-origin: left center;
+  opacity: 0.75;
+}
+
+.login-route-a {
+  left: 18%;
+  top: 150px;
+  width: 54%;
+  transform: rotate(13deg);
+  animation: login-route-pulse 2.8s ease-in-out infinite;
+}
+
+.login-route-b {
+  left: 12%;
+  top: 250px;
+  width: 68%;
+  transform: rotate(-9deg);
+  animation: login-route-pulse 3.4s ease-in-out infinite;
+}
+
+.login-route-c {
+  left: 38%;
+  top: 90px;
+  width: 42%;
+  transform: rotate(68deg);
+  animation: login-route-pulse 3s ease-in-out infinite;
+}
+
+@keyframes login-grid-shift {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+  100% {
+    background-position: 96px 96px, 96px 96px;
+  }
+}
+
+@keyframes login-float-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes login-float-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-8px, 8px, 0);
+  }
+}
+
+@keyframes login-float-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(8px, -6px, 0);
+  }
+}
+
+@keyframes login-route-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
 @media (max-width: 768px) {
   .operator-table {
     min-width: 680px;
