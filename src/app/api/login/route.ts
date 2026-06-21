@@ -12,11 +12,13 @@ export async function POST(request: Request) {
     | {
         user_id?: string;
         account?: string;
+        username?: string;
+        display_name?: string;
         password?: string;
       }
     | null;
 
-  if (!(body?.account || body?.user_id) || !body.password) {
+  if (!(body?.account || body?.username || body?.display_name || body?.user_id) || !body.password) {
     return NextResponse.json(
       { tenant_id: tenantId, error: "请输入账号和密码。" },
       { status: 400 },
@@ -28,6 +30,8 @@ export async function POST(request: Request) {
       dataService.loginUser({
         user_id: body.user_id,
         account: body.account,
+        username: body.username,
+        display_name: body.display_name,
         password: body.password,
       }),
     );

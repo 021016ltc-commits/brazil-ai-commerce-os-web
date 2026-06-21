@@ -862,9 +862,11 @@ export async function updateLocalUser(params: {
 export async function authenticateLocalUser(params: {
   user_id?: string;
   account?: string;
+  username?: string;
+  display_name?: string;
   password?: string;
 }): Promise<{ source: UsersApiResponse["source"]; user: UserItem; redirect_to: string; message: string }> {
-  const account = params.account?.trim() || params.user_id?.trim();
+  const account = params.account?.trim() || params.username?.trim() || params.display_name?.trim() || params.user_id?.trim();
   const password = params.password ?? "";
 
   if (!account || !password) {

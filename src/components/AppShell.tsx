@@ -98,6 +98,8 @@ const settingsGroups = [
   },
 ] as const;
 
+const publicPaths = new Set(["/", "/login"]);
+
 function routePath(href: string) {
   return href.split("#")[0];
 }
@@ -274,11 +276,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { dictionary } = useLanguage();
   const [currentUser, setCurrentUser] = useState<UserItem | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
-    const syncUser = () => setCurrentUser(readStoredUser());
+    const syncUser = () => {
+      setCurrentUser(readStoredUser());
+      setAuthReady(true);
+    };
     syncUser();
     window.addEventListener("storage", syncUser);
     window.addEventListener("baico-auth-change", syncUser);
@@ -289,13 +295,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!authReady || currentUser || publicPaths.has(pathname)) return;
+    router.replace("/login");
+  }, [authReady, currentUser, pathname, router]);
+
   const currentPageTitle = useMemo(
     () => dictionary.routes[pathname as keyof typeof dictionary.routes] ?? dictionary.app.name,
     [dictionary, pathname],
   );
 
-  if (pathname === "/login") {
-    return <main className="min-h-screen bg-mist">{children}</main>;
+  if (publicPaths.has(pathname)) {
+    return <>{children}</>;
   }
 
   const canAccessCurrentPage = userCanAccessPath(currentUser, pathname);
@@ -318,6 +329,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     clearLocalUser();
     router.push("/login");
   };
+
+  if (!authReady || !currentUser) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-mist px-4 text-sm text-slate-500">
+        正在进入系统...
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-mist text-ink">
