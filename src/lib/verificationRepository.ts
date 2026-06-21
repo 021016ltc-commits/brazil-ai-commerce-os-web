@@ -206,7 +206,7 @@ export async function getVerificationStatusResponse(): Promise<VerificationStatu
       measure(getInventoryResponse, "库存中心接口可返回库存健康和补货数据。"),
       measure(getApprovalsResponse, "审批中心接口可返回待审批事项和审批历史。"),
       measure(getActionExecutionQueueResponse, "执行中心接口可返回受控执行审批数据。"),
-      measure(getShopeeOrdersResponse, "Shopee店铺只读接口可返回订单数据。"),
+      measure(getShopeeOrdersResponse, "授权店铺只读接口可返回订单数据。"),
       measure(getDecisionMetricsResponse, "决策复盘接口可计算历史决策效果。"),
       measure(getBusinessImpactResponse, "经营结果分析接口可计算利润、库存和GMV归因。"),
       measure(getSelfOptimizationResponse, "规则优化接口可生成仅供人工审核的规则建议。"),

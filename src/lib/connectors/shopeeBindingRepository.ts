@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { getClient } from "@/lib/database";
 import { sealToken, openToken } from "@/lib/secureTokens";
 import { currentTenantId } from "@/lib/tenantContext";
-import type { ShopeeBindingPublicStatus, ShopeeBindingStatusValue, ShopeeShopBinding } from "@/types";
+import type {
+  PlatformShopBindingPublicItem,
+  ShopeeBindingPublicStatus,
+  ShopeeBindingStatusValue,
+  ShopeeShopBinding,
+} from "@/types";
 
 type BindingRow = {
   binding_id: string;
@@ -10,6 +15,8 @@ type BindingRow = {
   shop_id: string;
   shop_name: string | null;
   region: string | null;
+  owner_name: string | null;
+  notes: string | null;
   partner_id: string;
   access_token: string;
   refresh_token: string;
@@ -24,6 +31,8 @@ type SaveBindingInput = {
   shop_id: string;
   shop_name?: string | null;
   region?: string | null;
+  owner_name?: string | null;
+  notes?: string | null;
   partner_id: string;
   access_token: string;
   refresh_token: string;
@@ -50,6 +59,25 @@ function configuredForOfficialBinding() {
   );
 }
 
+function bindingToPublicItem(binding: ShopeeShopBinding): PlatformShopBindingPublicItem {
+  return {
+    binding_id: binding.binding_id,
+    platform: "Shopee",
+    platform_label: "Shopee",
+    shop_id: binding.shop_id,
+    shop_name: binding.shop_name,
+    region: binding.region,
+    owner_name: binding.owner_name,
+    notes: binding.notes,
+    status: binding.binding_status,
+    bound_at: binding.bound_at,
+    updated_at: binding.updated_at,
+    last_sync_at: binding.last_sync_at,
+    token_expire_at: binding.token_expire_at,
+    readonly: true,
+  };
+}
+
 export async function ensureShopeeBindingStorage() {
   const client = await getClient();
 
@@ -61,6 +89,8 @@ export async function ensureShopeeBindingStorage() {
         shop_id TEXT NOT NULL,
         shop_name TEXT,
         region TEXT,
+        owner_name TEXT,
+        notes TEXT,
         partner_id TEXT NOT NULL,
         access_token TEXT NOT NULL,
         refresh_token TEXT NOT NULL,
@@ -72,6 +102,8 @@ export async function ensureShopeeBindingStorage() {
         UNIQUE(tenant_id, shop_id)
       )
     `);
+    await client.query("ALTER TABLE shopee_shop_bindings ADD COLUMN IF NOT EXISTS owner_name TEXT");
+    await client.query("ALTER TABLE shopee_shop_bindings ADD COLUMN IF NOT EXISTS notes TEXT");
     return client.mode;
   }
 
@@ -84,6 +116,8 @@ export async function ensureShopeeBindingStorage() {
           shop_id TEXT NOT NULL,
           shop_name TEXT,
           region TEXT,
+          owner_name TEXT,
+          notes TEXT,
           partner_id TEXT NOT NULL,
           access_token TEXT NOT NULL,
           refresh_token TEXT NOT NULL,
@@ -95,6 +129,15 @@ export async function ensureShopeeBindingStorage() {
           UNIQUE(tenant_id, shop_id)
         )
       `);
+      const columns = (db
+        .prepare("PRAGMA table_info(shopee_shop_bindings)")
+        .all() as Array<{ name: string }>).map((column) => column.name);
+      if (!columns.includes("owner_name")) {
+        db.exec("ALTER TABLE shopee_shop_bindings ADD COLUMN owner_name TEXT");
+      }
+      if (!columns.includes("notes")) {
+        db.exec("ALTER TABLE shopee_shop_bindings ADD COLUMN notes TEXT");
+      }
     }, false);
   }
 
@@ -111,6 +154,8 @@ export async function saveShopeeShopBinding(input: SaveBindingInput) {
     shop_id: input.shop_id,
     shop_name: input.shop_name ?? null,
     region: input.region ?? "BR",
+    owner_name: input.owner_name ?? null,
+    notes: input.notes ?? null,
     partner_id: input.partner_id,
     access_token: sealToken(input.access_token),
     refresh_token: sealToken(input.refresh_token),
@@ -126,13 +171,15 @@ export async function saveShopeeShopBinding(input: SaveBindingInput) {
   if (client.mode === "postgres") {
     const result = await client.query<BindingRow>(
       `INSERT INTO shopee_shop_bindings (
-         binding_id, tenant_id, shop_id, shop_name, region, partner_id, access_token, refresh_token,
+         binding_id, tenant_id, shop_id, shop_name, region, owner_name, notes, partner_id, access_token, refresh_token,
          token_expire_at, binding_status, bound_at, updated_at, last_sync_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (tenant_id, shop_id) DO UPDATE SET
          shop_name = EXCLUDED.shop_name,
          region = EXCLUDED.region,
+         owner_name = COALESCE(shopee_shop_bindings.owner_name, EXCLUDED.owner_name),
+         notes = COALESCE(shopee_shop_bindings.notes, EXCLUDED.notes),
          partner_id = EXCLUDED.partner_id,
          access_token = EXCLUDED.access_token,
          refresh_token = EXCLUDED.refresh_token,
@@ -146,6 +193,8 @@ export async function saveShopeeShopBinding(input: SaveBindingInput) {
         payload.shop_id,
         payload.shop_name,
         payload.region,
+        payload.owner_name,
+        payload.notes,
         payload.partner_id,
         payload.access_token,
         payload.refresh_token,
@@ -164,13 +213,15 @@ export async function saveShopeeShopBinding(input: SaveBindingInput) {
       db
         .prepare(
           `INSERT INTO shopee_shop_bindings (
-             binding_id, tenant_id, shop_id, shop_name, region, partner_id, access_token, refresh_token,
+             binding_id, tenant_id, shop_id, shop_name, region, owner_name, notes, partner_id, access_token, refresh_token,
              token_expire_at, binding_status, bound_at, updated_at, last_sync_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(tenant_id, shop_id) DO UPDATE SET
              shop_name = excluded.shop_name,
              region = excluded.region,
+             owner_name = COALESCE(shopee_shop_bindings.owner_name, excluded.owner_name),
+             notes = COALESCE(shopee_shop_bindings.notes, excluded.notes),
              partner_id = excluded.partner_id,
              access_token = excluded.access_token,
              refresh_token = excluded.refresh_token,
@@ -184,6 +235,8 @@ export async function saveShopeeShopBinding(input: SaveBindingInput) {
           payload.shop_id,
           payload.shop_name,
           payload.region,
+          payload.owner_name,
+          payload.notes,
           payload.partner_id,
           payload.access_token,
           payload.refresh_token,
@@ -234,6 +287,83 @@ export async function getActiveShopeeShopBinding() {
   }
 
   return null;
+}
+
+export async function listShopeeShopBindings() {
+  await ensureShopeeBindingStorage();
+  const client = await getClient();
+  const tenantId = currentTenantId();
+
+  if (client.mode === "postgres") {
+    const result = await client.query<BindingRow>(
+      `SELECT *
+         FROM shopee_shop_bindings
+        WHERE tenant_id = $1
+        ORDER BY updated_at DESC`,
+      [tenantId],
+    );
+    return result.rows.map(rowToBinding);
+  }
+
+  if (client.mode === "sqlite") {
+    return client.withSQLite((db) => {
+      const rows = db
+        .prepare(
+          `SELECT *
+             FROM shopee_shop_bindings
+            WHERE tenant_id = ?
+            ORDER BY updated_at DESC`,
+        )
+        .all(tenantId) as BindingRow[];
+      return rows.map(rowToBinding);
+    });
+  }
+
+  return [];
+}
+
+export async function updateShopeeShopBindingProfile(params: {
+  shop_id: string;
+  shop_name?: string | null;
+  owner_name?: string | null;
+  notes?: string | null;
+}) {
+  await ensureShopeeBindingStorage();
+  const client = await getClient();
+  const tenantId = currentTenantId();
+  const timestamp = nowIso();
+  const shopName = params.shop_name?.trim() || null;
+  const ownerName = params.owner_name?.trim() || null;
+  const notes = params.notes?.trim() || null;
+
+  if (client.mode === "postgres") {
+    await client.query(
+      `UPDATE shopee_shop_bindings
+          SET shop_name = $1,
+              owner_name = $2,
+              notes = $3,
+              updated_at = $4
+        WHERE tenant_id = $5 AND shop_id = $6`,
+      [shopName, ownerName, notes, timestamp, tenantId, params.shop_id],
+    );
+  }
+
+  if (client.mode === "sqlite") {
+    await client.withSQLite((db) => {
+      db
+        .prepare(
+          `UPDATE shopee_shop_bindings
+              SET shop_name = ?,
+                  owner_name = ?,
+                  notes = ?,
+                  updated_at = ?
+            WHERE tenant_id = ? AND shop_id = ?`,
+        )
+        .run(shopName, ownerName, notes, timestamp, tenantId, params.shop_id);
+    }, false);
+  }
+
+  return listShopeeShopBindings();
 }
 
 export async function markShopeeBindingLastSync(shopId: string, syncedAt = nowIso()) {
@@ -344,10 +474,13 @@ export async function getShopeeBindingStatus(authUrl: string | null = null): Pro
       last_sync_at: null,
       auth_url: null,
       message: "请先配置 Shopee Partner ID 和 Partner Key。",
+      shops: [],
     };
   }
 
-  const binding = await getActiveShopeeShopBinding().catch(() => null);
+  const bindings = await listShopeeShopBindings().catch(() => []);
+  const binding = bindings.find((item) => item.binding_status === "bound") ?? bindings[0] ?? null;
+  const shops = bindings.map(bindingToPublicItem);
 
   if (!binding) {
     return {
@@ -360,7 +493,8 @@ export async function getShopeeBindingStatus(authUrl: string | null = null): Pro
       token_expire_at: null,
       last_sync_at: null,
       auth_url: authUrl,
-      message: "尚未绑定 Shopee 店铺。",
+      message: "尚未绑定授权店铺。",
+      shops,
     };
   }
 
@@ -374,6 +508,7 @@ export async function getShopeeBindingStatus(authUrl: string | null = null): Pro
     token_expire_at: binding.token_expire_at,
     last_sync_at: binding.last_sync_at,
     auth_url: authUrl,
-    message: binding.binding_status === "bound" ? "Shopee 店铺已绑定。" : "Shopee 授权需要刷新。",
+    message: binding.binding_status === "bound" ? "授权店铺已绑定。" : "店铺授权需要刷新。",
+    shops,
   };
 }

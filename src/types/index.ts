@@ -1011,6 +1011,8 @@ export interface ShopeeShopBinding {
   shop_id: string;
   shop_name: string | null;
   region: string | null;
+  owner_name: string | null;
+  notes: string | null;
   partner_id: string;
   access_token: string;
   refresh_token: string;
@@ -1019,6 +1021,23 @@ export interface ShopeeShopBinding {
   bound_at: string;
   updated_at: string;
   last_sync_at: string | null;
+}
+
+export interface PlatformShopBindingPublicItem {
+  binding_id: string;
+  platform: string;
+  platform_label: string;
+  shop_id: string;
+  shop_name: string | null;
+  region: string | null;
+  owner_name: string | null;
+  notes: string | null;
+  status: ShopeeBindingStatusValue;
+  bound_at: string;
+  updated_at: string;
+  last_sync_at: string | null;
+  token_expire_at: string | null;
+  readonly: true;
 }
 
 export interface ShopeeBindingPublicStatus {
@@ -1032,6 +1051,7 @@ export interface ShopeeBindingPublicStatus {
   last_sync_at: string | null;
   auth_url: string | null;
   message: string;
+  shops: PlatformShopBindingPublicItem[];
 }
 
 export interface DecisionFeedbackRecord {

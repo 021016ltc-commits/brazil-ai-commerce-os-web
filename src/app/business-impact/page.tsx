@@ -37,7 +37,7 @@ function impactSourceLabel(source: BusinessImpactActionItem["source"]) {
   return {
     action_queue: "执行审批事项",
     decision_feedback: "决策复盘",
-    shopee_cache: "Shopee店铺数据",
+    shopee_cache: "授权店铺数据",
     manual: "人工录入",
   }[source];
 }

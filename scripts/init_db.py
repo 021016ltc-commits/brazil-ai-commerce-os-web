@@ -349,6 +349,8 @@ SCHEMA_STATEMENTS = [
         shop_id TEXT NOT NULL,
         shop_name TEXT,
         region TEXT,
+        owner_name TEXT,
+        notes TEXT,
         partner_id TEXT NOT NULL,
         access_token TEXT NOT NULL,
         refresh_token TEXT NOT NULL,

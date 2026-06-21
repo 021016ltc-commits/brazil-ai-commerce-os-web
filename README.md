@@ -1444,9 +1444,9 @@ Build check:
 npm run build
 ```
 
-## Shopee Read-Only Connector V1
+## Store Authorization Center / Shopee Read-Only Connector V1
 
-Task 14 adds `/shopee` as a read-only Shopee connector. It can now bind a Shopee shop through the official Shopee Open Platform authorization flow, pull real read-only shop data, cache the data locally, and fall back to local cache when Shopee is temporarily unavailable.
+Task 14 adds `/shopee` as the Store Authorization Center. The current production connector supports Shopee first, while the UI keeps platform slots for Mercado Livre, Amazon BR, TikTok Shop BR, AliExpress, and future channels. Each Shopee shop must be authorized once through the official Shopee Open Platform flow. After authorization, the system can pull real read-only shop data, cache the data locally, and use it as the operating data source for the rest of the system.
 
 Important boundaries:
 
@@ -1459,6 +1459,7 @@ Important boundaries:
 - No automatic trading
 - No cron or background scheduled sync
 - No Shopee write API is implemented
+- Multiple Shopee shops can be bound under the same app and are synchronized one by one
 
 Connector module:
 
@@ -1476,6 +1477,7 @@ SQLite cache tables:
 Task 14 API routes:
 
 - `GET /api/shopee/binding`
+- `PATCH /api/shopee/binding`
 - `GET /api/shopee/auth/start`
 - `GET /api/shopee/auth/callback`
 - `GET /api/shopee/orders`
@@ -1508,10 +1510,12 @@ Official shop binding:
 1. Configure the Shopee variables above in Vercel or the local `.env` file.
 2. Set the same redirect URL in Shopee Open Platform: `/api/shopee/auth/callback`.
 3. Open `/shopee` as an admin user.
-4. Click `绑定 Shopee 店铺`.
-5. Authorize the shop in Shopee.
+4. Select `Shopee` and click `授权当前平台店铺`.
+5. Log in to the target Shopee shop and complete authorization.
 6. The callback stores `shop_id`, access token, refresh token, expiry time, and binding status in `shopee_shop_bindings`.
-7. `/api/shopee/orders`, `/api/shopee/products`, and `/api/shopee/inventory` read from the bound shop first.
+7. Repeat authorization for every Shopee shop that should be included.
+8. Use the bound shop list to set `shop_name`, `owner_name`, and `notes` for internal operations.
+9. `/api/shopee/orders`, `/api/shopee/products`, and `/api/shopee/inventory` read from authorized shops first.
 
 Token safety:
 

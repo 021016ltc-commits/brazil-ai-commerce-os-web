@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import {
-  getActiveShopeeShopBinding,
+  listShopeeShopBindings,
   markShopeeBindingLastSync,
   markShopeeBindingStatus,
   saveShopeeShopBinding,
@@ -375,14 +375,8 @@ async function fetchOfficialProducts(binding: ShopeeShopBinding): Promise<Shopee
   return nestedArray(detailPayload, "item_list").map(normalizeOfficialProduct).filter((item) => item.product_id);
 }
 
-export async function fetchOfficialShopeeReadOnlyData(): Promise<OfficialShopeePayload | null> {
-  if (!officialShopeeConfigured()) return null;
-
-  const activeBinding = await getActiveShopeeShopBinding().catch(() => null);
-  if (!activeBinding) return null;
-
-  const binding = await ensureFreshBinding(activeBinding);
-
+async function fetchOfficialShopeeReadOnlyDataForBinding(input: ShopeeShopBinding): Promise<OfficialShopeePayload> {
+  const binding = await ensureFreshBinding(input);
   try {
     const [orders, products] = await Promise.all([
       fetchOfficialOrders(binding),
@@ -423,4 +417,43 @@ export async function fetchOfficialShopeeReadOnlyData(): Promise<OfficialShopeeP
     });
     throw error;
   }
+}
+
+export async function fetchOfficialShopeeReadOnlyData(): Promise<OfficialShopeePayload | null> {
+  if (!officialShopeeConfigured()) return null;
+
+  const bindings = (await listShopeeShopBindings().catch(() => [])).filter(
+    (binding) => binding.binding_status === "bound" || binding.binding_status === "expired",
+  );
+  if (bindings.length === 0) return null;
+
+  const merged: OfficialShopeePayload = {
+    orders: [],
+    products: [],
+    inventory: [],
+  };
+  const errors: Error[] = [];
+
+  for (const binding of bindings) {
+    try {
+      const payload = await fetchOfficialShopeeReadOnlyDataForBinding(binding);
+      merged.orders.push(...payload.orders);
+      merged.products.push(...payload.products);
+      merged.inventory.push(...payload.inventory);
+    } catch (error) {
+      if (error instanceof Error) {
+        errors.push(error);
+      }
+    }
+  }
+
+  if (merged.orders.length || merged.products.length || merged.inventory.length) {
+    return merged;
+  }
+
+  if (errors.length > 0) {
+    throw errors[0];
+  }
+
+  return merged;
 }
