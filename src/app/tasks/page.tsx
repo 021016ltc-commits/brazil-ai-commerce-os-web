@@ -8,7 +8,6 @@ import {
   ArrowRight,
   BarChart3,
   Boxes,
-  BrainCircuit,
   CheckCircle2,
   ClipboardList,
   DollarSign,
@@ -155,7 +154,6 @@ function SectionHeader({
       </div>
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold text-ink">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -365,7 +363,7 @@ export default function TasksPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">今日任务</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                把机会、利润、库存和审批事项收敛成今天要处理的任务，优先看最重要的 5 件事。
+                按优先级处理今天最重要的运营事项。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => window.location.reload()} />
@@ -628,18 +626,6 @@ export default function TasksPage() {
         </section>
       </section>
 
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
-        <div className="flex items-start gap-3">
-          <BrainCircuit className="mt-1 h-5 w-5 text-forest" aria-hidden="true" />
-          <div>
-            <h2 className="text-lg font-semibold text-ink">任务中心的边界</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              今日任务只负责把数据汇总成可处理任务。它不会连接外部平台服务，不会调用外部智能服务，
-              不会自动补货、自动调价、自动投广告或自动上架。所有建议都必须经过人工审批。
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

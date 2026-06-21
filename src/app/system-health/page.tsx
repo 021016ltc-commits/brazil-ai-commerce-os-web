@@ -105,7 +105,6 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-500">{detail}</p>
     </article>
   );
 }
@@ -169,9 +168,9 @@ export default function SystemHealthPage() {
             <div className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
               系统健康
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">系统是否正常</h1>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">系统健康</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              默认只展示运营结论；详细诊断保留给管理员排查使用。
+              查看系统是否正常运行。
             </p>
           </div>
           <div className="rounded-lg border border-line bg-slate-50 p-4">

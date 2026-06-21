@@ -7,7 +7,6 @@ import {
   Bot,
   BrainCircuit,
   LineChart,
-  ShieldCheck,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyAnalysisResponse } from "@/data/emptyResponses";
@@ -93,7 +92,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -196,15 +194,14 @@ export default function AnalysisPage() {
                 {sourceLabel(data.source)}
               </span>
               <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                规则分析 + 真实数据
+                分析结论
               </span>
             </div>
 
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">数据分析</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把“哪些机会值得今天优先看、哪些风险会拖慢执行、哪些类目趋势还在走强、哪些建议该先进入人工判断”
-                放到同一个分析面板里。它不连接真实 AI 模型，而是用规则引擎把真实业务数据整理成可执行的分析结论。
+                查看机会、风险、市场和建议。
               </p>
             </div>
           </div>
@@ -238,11 +235,7 @@ export default function AnalysisPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">筛选与排序</div>
-            <h2 className="text-lg font-semibold text-ink">先缩小范围，再安排今天的分析顺序</h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              平台筛选回答“我先看哪个渠道”，风险筛选回答“哪些问题必须先处理”，建议优先级筛选回答“哪些动作更值得今天先做人审”，
-              排序则决定你是按机会、风险、需求还是建议优先级来排处理顺序。
-            </p>
+            <h2 className="text-lg font-semibold text-ink">筛选与排序</h2>
           </div>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-slate-100 text-ink">
             <ArrowDownWideNarrow className="h-5 w-5" aria-hidden="true" />
@@ -520,36 +513,6 @@ export default function AnalysisPage() {
             </table>
           </div>
         </section>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <BrainCircuit className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">机会分析怎么用</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            机会分析更像今天的人工复核清单。先看高分、再看风险、最后看建议，能快速知道哪些品该先进入判断流程。
-          </p>
-        </article>
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">风险分析怎么用</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            风险分析的目标不是否掉机会，而是提前识别会误伤执行的地方，让团队先把人工防守动作做完。
-          </p>
-        </article>
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <Bot className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">AI建议怎么用</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            AI建议只是本地规则引擎生成的建议清单，用来辅助运营排序和人工审批，不会自动触发任何平台动作。
-          </p>
-        </article>
       </section>
     </div>
   );

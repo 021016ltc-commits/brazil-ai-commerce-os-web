@@ -71,7 +71,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -168,7 +167,7 @@ export default function BusinessImpactPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">经营结果分析</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                衡量历史决策和受控执行建议对利润、库存和销售额的影响，只分析不执行。
+                查看决策和动作的经营影响。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />

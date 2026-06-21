@@ -83,7 +83,7 @@ export default function SystemPage() {
     <div className="space-y-4">
       <StandardPageHeader
         title="系统设置"
-        description="管理语言界面、账号入口与内部运行约束。"
+        description="管理语言、账号和系统入口。"
         meta={[
           { label: "数据状态", value: dataStatusLabel(activeDataSource) },
           { label: "运行模式", value: runtimeLabel() },

@@ -20,6 +20,8 @@ export type ApiDataSource = "sqlite" | "mock";
 
 export type ShopeeDataSource = "shopee_api" | "sqlite" | "mock";
 
+export type ShopeeBindingStatusValue = "unbound" | "bound" | "expired" | "error";
+
 export type PlanType = "free" | "pro" | "enterprise";
 
 export type TenantRole = "owner" | "admin" | "operator" | "viewer";
@@ -864,6 +866,9 @@ export type OperationLogAction =
   | "shopee_api_request"
   | "shopee_fallback"
   | "shopee_token_refresh"
+  | "shopee_binding_created"
+  | "shopee_binding_failed"
+  | "shopee_binding_disconnected"
   | "sync_start"
   | "sync_complete"
   | "snapshot_created"
@@ -997,6 +1002,35 @@ export interface ShopeeSyncResult {
   orders_count: number;
   products_count: number;
   inventory_count: number;
+  message: string;
+}
+
+export interface ShopeeShopBinding {
+  binding_id: string;
+  tenant_id: string;
+  shop_id: string;
+  shop_name: string | null;
+  region: string | null;
+  partner_id: string;
+  access_token: string;
+  refresh_token: string;
+  token_expire_at: string | null;
+  binding_status: ShopeeBindingStatusValue;
+  bound_at: string;
+  updated_at: string;
+  last_sync_at: string | null;
+}
+
+export interface ShopeeBindingPublicStatus {
+  configured: boolean;
+  bound: boolean;
+  status: ShopeeBindingStatusValue;
+  shop_id: string | null;
+  shop_name: string | null;
+  region: string | null;
+  token_expire_at: string | null;
+  last_sync_at: string | null;
+  auth_url: string | null;
   message: string;
 }
 

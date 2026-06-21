@@ -229,7 +229,7 @@ export default function DecisionFeedbackPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">决策复盘</h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                记录买入、忽略、观察或拒绝后的实际销售、利润和收益表现，用来判断推荐是否可靠。
+                复盘人工决策后的实际结果。
               </p>
             </div>
           </div>
@@ -530,9 +530,6 @@ export default function DecisionFeedbackPage() {
               反馈学习机制
             </div>
             <h2 className="mt-2 text-xl font-semibold text-ink">优先级和偏差修正建议</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              这些是可解释的本地规则建议。真正调整评分权重、推荐优先级或运营策略前，仍需要人工确认。
-            </p>
           </div>
 
           <div className="mt-5 space-y-4">

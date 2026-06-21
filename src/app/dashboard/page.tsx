@@ -154,7 +154,7 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-ink">运营总览</h1>
-          <p className="mt-1 text-sm text-slate-500">老板三秒看懂今天赚不赚钱、库存有没有风险、还有多少事项待处理。</p>
+          <p className="mt-1 text-sm text-slate-500">查看今日利润、库存风险和待处理事项。</p>
         </div>
         <MoreActionsMenu onRefresh={() => window.location.reload()} />
       </div>

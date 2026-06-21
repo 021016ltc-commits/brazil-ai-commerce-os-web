@@ -1446,7 +1446,7 @@ npm run build
 
 ## Shopee Read-Only Connector V1
 
-Task 14 adds `/shopee` as a read-only Shopee connector. It can read from a configured read-only Shopee API proxy, cache the data into local SQLite, and fall back to mock data when neither API nor cache is available.
+Task 14 adds `/shopee` as a read-only Shopee connector. It can now bind a Shopee shop through the official Shopee Open Platform authorization flow, pull real read-only shop data, cache the data locally, and fall back to local cache when Shopee is temporarily unavailable.
 
 Important boundaries:
 
@@ -1458,19 +1458,26 @@ Important boundaries:
 - No ad operations
 - No automatic trading
 - No cron or background scheduled sync
+- No Shopee write API is implemented
 
 Connector module:
 
 - `src/connectors/shopee/`
+- `src/lib/connectors/shopeeOfficialClient.ts`
+- `src/lib/connectors/shopeeBindingRepository.ts`
 
 SQLite cache tables:
 
 - `shopee_orders`
 - `shopee_products`
 - `shopee_inventory`
+- `shopee_shop_bindings`
 
 Task 14 API routes:
 
+- `GET /api/shopee/binding`
+- `GET /api/shopee/auth/start`
+- `GET /api/shopee/auth/callback`
 - `GET /api/shopee/orders`
 - `GET /api/shopee/products`
 - `GET /api/shopee/inventory`
@@ -1478,16 +1485,39 @@ Task 14 API routes:
 
 Data priority:
 
-1. Shopee read-only API proxy when `SHOPEE_READONLY_API_BASE_URL` is configured
-2. SQLite cache
-3. Empty real-data state when no source is connected
+1. Official Shopee shop binding when `SHOPEE_PARTNER_ID` and `SHOPEE_PARTNER_KEY` are configured and the shop is authorized
+2. Shopee read-only API proxy when `SHOPEE_READONLY_API_BASE_URL` is configured
+3. SQLite/PostgreSQL cache
+4. Empty real-data state when no source is connected
 
 Optional environment variables:
 
 ```bash
+SHOPEE_MODE=readonly
+SHOPEE_OPEN_API_BASE_URL=https://partner.shopeemobile.com
+SHOPEE_PARTNER_ID=
+SHOPEE_PARTNER_KEY=
+SHOPEE_REDIRECT_URL=https://your-domain.com/api/shopee/auth/callback
+SHOPEE_TOKEN_ENCRYPTION_KEY=
 SHOPEE_READONLY_API_BASE_URL=
 SHOPEE_READONLY_ACCESS_TOKEN=
 ```
+
+Official shop binding:
+
+1. Configure the Shopee variables above in Vercel or the local `.env` file.
+2. Set the same redirect URL in Shopee Open Platform: `/api/shopee/auth/callback`.
+3. Open `/shopee` as an admin user.
+4. Click `绑定 Shopee 店铺`.
+5. Authorize the shop in Shopee.
+6. The callback stores `shop_id`, access token, refresh token, expiry time, and binding status in `shopee_shop_bindings`.
+7. `/api/shopee/orders`, `/api/shopee/products`, and `/api/shopee/inventory` read from the bound shop first.
+
+Token safety:
+
+- Tokens are not returned to the frontend.
+- Tokens are encrypted at rest when `SHOPEE_TOKEN_ENCRYPTION_KEY` is configured.
+- The binding flow only enables read-only data pulls.
 
 Expected read-only API proxy shape:
 

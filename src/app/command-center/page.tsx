@@ -199,7 +199,6 @@ function SectionHeader({
       </div>
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold text-ink">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -397,7 +396,7 @@ export default function CommandCenterPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">运营指挥中心</h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                把今天必须处理的风险、机会和执行队列压缩成一个工作台，所有动作仍需人工确认。
+                处理今天最重要的运营事项。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => window.location.reload()} />
@@ -514,17 +513,11 @@ export default function CommandCenterPage() {
         </section>
       </section>
 
-      <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <CheckCircle2 className="h-4 w-4 text-forest" aria-hidden="true" />
-              决策排序规则
-            </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              本页使用轻量排序：利润影响权重最高，风险等级第二，机会分第三。排序仅用于内部排班和判断优先级，
-              不会创建执行动作，不会绕过审批，也不会调用任何平台写入能力。
-            </p>
+      <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <CheckCircle2 className="h-4 w-4 text-forest" aria-hidden="true" />
+            今日排序已按利润、风险和机会整理
           </div>
           <div className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-slate-50 px-3 text-xs font-medium text-slate-600">
             <Gauge className="h-4 w-4" aria-hidden="true" />

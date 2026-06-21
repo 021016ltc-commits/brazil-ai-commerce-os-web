@@ -67,7 +67,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -153,7 +152,7 @@ export default function SelfOptimizationPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">规则优化</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                根据历史业务结果识别规则偏差并生成优化建议，所有建议只供人工复核。
+                查看规则表现和优化建议。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />

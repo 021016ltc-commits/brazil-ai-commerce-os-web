@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
   ArrowDownWideNarrow,
   BadgeAlert,
-  Boxes,
   Search,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyOpportunitiesResponse } from "@/data/emptyResponses";
@@ -99,7 +96,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -195,15 +191,14 @@ export default function OpportunitiesPage() {
                 {sourceLabel(data.source)}
               </span>
               <span className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-xs font-medium text-slate-600">
-                接口数据 + 真实数据
+                真实数据
               </span>
             </div>
 
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">机会中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                这个页面把“今天先看哪些品、哪些关键词值得盯、哪些风险不能忽略”放在一个操作面里。
-                运营不需要先翻多页，只要先筛一遍平台、机会等级和风险等级，就能决定今天的人工优先级。
+                筛选值得优先处理的商品、关键词和风险。
               </p>
             </div>
           </div>
@@ -237,11 +232,7 @@ export default function OpportunitiesPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">筛选与排序</div>
-            <h2 className="text-lg font-semibold text-ink">先缩小范围，再决定优先顺序</h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              平台筛选用来回答“我现在看哪个渠道”，机会等级用来回答“哪些值得先看”，风险等级用来回答“哪些必须先防守”。
-              排序则决定你是按机会分、市场分，还是按风险强度来排今天的处理顺序。
-            </p>
+            <h2 className="text-lg font-semibold text-ink">筛选与排序</h2>
           </div>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-slate-100 text-ink">
             <ArrowDownWideNarrow className="h-5 w-5" aria-hidden="true" />
@@ -472,36 +463,6 @@ export default function OpportunitiesPage() {
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <TrendingUp className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">机会分怎么看</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            机会分更像今天的执行优先级。它把市场分、利润空间、内容缺口和风险一起考虑，帮助你决定先审哪一批商品。
-          </p>
-        </article>
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <Boxes className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">关键词表在看什么</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            关键词表更偏市场判断。需求高、竞争可控、趋势向上的词，才值得你继续让团队往下做素材、详情和复核。
-          </p>
-        </article>
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
-          <div className="flex items-center gap-3 text-ink">
-            <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-            <h3 className="text-base font-semibold">风险提示怎么用</h3>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            风险提示是为了把错误执行挡在前面。先确认库存、物流、合规和评论样本，再决定要不要把机会真正推进到下一步。
-          </p>
-        </article>
       </section>
     </div>
   );

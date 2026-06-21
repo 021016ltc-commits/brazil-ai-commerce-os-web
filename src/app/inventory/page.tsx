@@ -115,7 +115,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -249,7 +248,7 @@ export default function InventoryPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">库存中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                快速判断有没有货、会不会断货、会不会积压，以及今天是否需要人工复核补货。
+                查看库存健康、缺货风险和补货建议。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => window.location.reload()} />
@@ -339,10 +338,7 @@ export default function InventoryPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">筛选与排序</div>
-            <h2 className="text-lg font-semibold text-ink">先缩小范围，再看库存动作优先级</h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              平台筛选帮助你切到具体渠道，库存状态筛选帮助你找断货、积压和慢动销，风险等级筛选帮助你先盯高风险，排序则决定今天按库存天数、库存量、断货风险还是补货优先级来排队。
-            </p>
+            <h2 className="text-lg font-semibold text-ink">筛选与排序</h2>
           </div>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-slate-100 text-ink">
             <ArrowDownWideNarrow className="h-5 w-5" aria-hidden="true" />

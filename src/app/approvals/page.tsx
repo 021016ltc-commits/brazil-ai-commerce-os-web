@@ -76,7 +76,6 @@ function SectionHeader({
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">{eyebrow}</div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -234,7 +233,7 @@ export default function ApprovalsPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">审批中心</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                把建议队列转成人工审批事项，批准、驳回或延后都只更新本地状态，不触发真实平台动作。
+                处理需要人工确认的建议。
               </p>
             </div>
             <MoreActionsMenu onRefresh={() => void refreshApprovals().catch(() => undefined)} />
@@ -269,11 +268,7 @@ export default function ApprovalsPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-forest">筛选与排序</div>
-            <h2 className="text-lg font-semibold text-ink">先缩小范围，再决定先批哪一类建议</h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              状态筛选回答“哪些还没决定”，优先级筛选回答“哪些今天必须先看”，平台筛选回答“我现在看哪个渠道”，
-              排序则决定你是按创建时间、优先级还是当前状态来排人工处理顺序。
-            </p>
+            <h2 className="text-lg font-semibold text-ink">筛选与排序</h2>
           </div>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-slate-100 text-ink">
             <Filter className="h-5 w-5" aria-hidden="true" />

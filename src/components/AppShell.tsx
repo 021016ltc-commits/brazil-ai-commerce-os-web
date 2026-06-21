@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HelpCenter } from "@/components/HelpCenter";
 import { useLanguage } from "@/components/LanguageProvider";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { QuickActions } from "@/components/QuickActions";
@@ -274,6 +275,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { dictionary } = useLanguage();
   const [currentUser, setCurrentUser] = useState<UserItem | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     const syncUser = () => setCurrentUser(readStoredUser());
@@ -387,9 +389,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button
                 type="button"
                 variant="ghost"
-                className="hidden h-10 w-10 border border-line bg-white px-0 text-slate-600 sm:inline-flex"
+                className="h-10 w-10 border border-line bg-white px-0 text-slate-600"
                 aria-label="帮助"
                 title="帮助"
+                aria-haspopup="dialog"
+                aria-expanded={helpOpen}
+                onClick={() => setHelpOpen(true)}
               >
                 <CircleHelp className="h-5 w-5" aria-hidden="true" />
               </Button>
@@ -432,6 +437,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      <HelpCenter pathname={pathname} currentUser={currentUser} open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

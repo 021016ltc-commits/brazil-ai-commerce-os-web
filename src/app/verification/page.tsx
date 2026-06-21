@@ -91,7 +91,6 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-500">{detail}</p>
     </article>
   );
 }
@@ -180,9 +179,9 @@ export default function VerificationPage() {
             <div className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-forest">
               系统验收
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">上线检查结论</h1>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">系统验收</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              用于每次更新后的核心页面与核心服务检查；不触发任何业务执行。
+              检查核心页面和服务是否可用。
             </p>
           </div>
           <div className="rounded-lg border border-line bg-slate-50 p-4">

@@ -228,7 +228,7 @@ export default function ActionsPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">执行中心</h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                所有采购、库存、价格、广告和上架类动作必须先进入执行队列；本页只审批和模拟，不执行真实平台动作。
+                审批和模拟受控执行申请。
               </p>
             </div>
           </div>

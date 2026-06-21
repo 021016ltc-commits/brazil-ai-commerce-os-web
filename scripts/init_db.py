@@ -343,6 +343,24 @@ SCHEMA_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS shopee_shop_bindings (
+        binding_id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'demo_tenant',
+        shop_id TEXT NOT NULL,
+        shop_name TEXT,
+        region TEXT,
+        partner_id TEXT NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        token_expire_at DATETIME,
+        binding_status TEXT NOT NULL DEFAULT 'bound',
+        bound_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        last_sync_at DATETIME,
+        UNIQUE(tenant_id, shop_id)
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS decision_feedback (
         decision_id TEXT PRIMARY KEY,
         product_id TEXT NOT NULL,
@@ -659,6 +677,7 @@ TENANT_SCOPED_TABLES = [
     "shopee_orders",
     "shopee_products",
     "shopee_inventory",
+    "shopee_shop_bindings",
     "decision_feedback",
     "decision_history",
     "decision_business_outcomes",
@@ -900,6 +919,7 @@ def main() -> None:
     print("- shopee_orders")
     print("- shopee_products")
     print("- shopee_inventory")
+    print("- shopee_shop_bindings")
     print("- decision_feedback")
     print("- decision_history")
     print("- decision_business_outcomes")

@@ -126,7 +126,7 @@ export function ShopeeExperienceCharts() {
     <section className="grid gap-5 xl:grid-cols-3">
       <BarChartCard
         title="店铺商品销量排行"
-        description="只读展示 Shopee 缓存商品销量。"
+        description="只读展示商品销量。"
         data={products.data.map((item) => ({ label: item.title, value: item.sales_count })).slice(0, 6)}
         valueLabel={(value) => `${value}件`}
       />
@@ -140,7 +140,7 @@ export function ShopeeExperienceCharts() {
       />
       <BarChartCard
         title="订单状态分布"
-        description="按只读订单缓存统计履约状态。"
+        description="按订单状态统计履约。"
         data={Object.entries(orderStatus).map(([status, value]) => ({
           label: shopeeOrderStatusLabel(status),
           value,

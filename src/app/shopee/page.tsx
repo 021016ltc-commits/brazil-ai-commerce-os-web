@@ -15,6 +15,7 @@ import type {
   ShopeeInventoryItem,
   ShopeeOrder,
   ShopeeProduct,
+  ShopeeBindingPublicStatus,
   ShopeeReadOnlyApiResponse,
   ShopeeSyncResult,
 } from "@/types";
@@ -22,6 +23,18 @@ import type {
 const fallbackOrders: ShopeeReadOnlyApiResponse<ShopeeOrder> = emptyShopeeOrdersResponse;
 const fallbackProducts: ShopeeReadOnlyApiResponse<ShopeeProduct> = emptyShopeeProductsResponse;
 const fallbackInventory: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = emptyShopeeInventoryResponse;
+const fallbackBinding: ShopeeBindingPublicStatus = {
+  configured: false,
+  bound: false,
+  status: "unbound",
+  shop_id: null,
+  shop_name: null,
+  region: null,
+  token_expire_at: null,
+  last_sync_at: null,
+  auth_url: null,
+  message: "请先配置 Shopee 授权信息。",
+};
 
 function formatBrl(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -81,7 +94,6 @@ function SectionHeader({
       </div>
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold text-ink">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
       </div>
     </div>
   );
@@ -118,12 +130,13 @@ export default function ShopeePage() {
   const [orders, setOrders] = useState(fallbackOrders);
   const [products, setProducts] = useState(fallbackProducts);
   const [inventory, setInventory] = useState(fallbackInventory);
+  const [binding, setBinding] = useState<ShopeeBindingPublicStatus>(fallbackBinding);
   const [syncResult, setSyncResult] = useState<ShopeeSyncResult | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
   async function refreshData() {
-    const [ordersPayload, productsPayload, inventoryPayload] = await Promise.all([
+    const [ordersPayload, productsPayload, inventoryPayload, bindingPayload] = await Promise.all([
       fetch("/api/shopee/orders", { cache: "no-store" }).then((response) =>
         response.ok ? response.json() : Promise.reject(),
       ),
@@ -133,11 +146,15 @@ export default function ShopeePage() {
       fetch("/api/shopee/inventory", { cache: "no-store" }).then((response) =>
         response.ok ? response.json() : Promise.reject(),
       ),
+      fetch("/api/shopee/binding", { cache: "no-store" }).then((response) =>
+        response.ok ? response.json() : fallbackBinding,
+      ),
     ]);
 
     setOrders(ordersPayload);
     setProducts(productsPayload);
     setInventory(inventoryPayload);
+    setBinding(bindingPayload);
   }
 
   useEffect(() => {
@@ -148,6 +165,7 @@ export default function ShopeePage() {
       setOrders(fallbackOrders);
       setProducts(fallbackProducts);
       setInventory(fallbackInventory);
+      setBinding(fallbackBinding);
     });
 
     return () => {
@@ -172,7 +190,8 @@ export default function ShopeePage() {
   );
   const totalRevenue = orders.data.reduce((sum, order) => sum + order.price * order.quantity, 0);
   const totalAvailableStock = inventory.data.reduce((sum, item) => sum + item.available_stock, 0);
-  const latestSync = orders.synced_at ?? products.synced_at ?? inventory.synced_at ?? syncResult?.synced_at ?? null;
+  const latestSync =
+    orders.synced_at ?? products.synced_at ?? inventory.synced_at ?? syncResult?.synced_at ?? binding.last_sync_at ?? null;
 
   async function handleSync() {
     setIsSyncing(true);
@@ -208,8 +227,23 @@ export default function ShopeePage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-ink">Shopee店铺</h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                只读查看订单、商品和库存状态，不下单、不改价、不上架、不回写库存。
+                查看订单、商品和库存状态。
               </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {isAdmin && binding.auth_url ? (
+                <a
+                  href={binding.auth_url}
+                  className="inline-flex h-9 items-center rounded-md bg-forest px-3 text-sm font-semibold text-white hover:bg-teal-700"
+                >
+                  {binding.bound ? "重新授权 Shopee 店铺" : "绑定 Shopee 店铺"}
+                </a>
+              ) : null}
+              {!binding.configured ? (
+                <span className="inline-flex min-h-9 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber">
+                  需要配置 Shopee Partner 信息
+                </span>
+              ) : null}
             </div>
             <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems>
               {isAdmin ? (
@@ -234,7 +268,9 @@ export default function ShopeePage() {
                 <div className="mt-2 text-lg font-semibold text-ink">
                   最近同步：{formatDateTime(latestSync)}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">管理员可在更多操作中手动读取最新只读数据。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {binding.bound ? `已绑定店铺：${binding.shop_id}` : binding.message}
+                </p>
               </div>
               <ShieldCheck className="h-5 w-5 text-forest" aria-hidden="true" />
             </div>
