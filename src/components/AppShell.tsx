@@ -297,7 +297,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!authReady || currentUser || publicPaths.has(pathname)) return;
-    router.replace("/login");
+    try {
+      window.sessionStorage.setItem("baico_access_notice", "请先登录后进入系统");
+    } catch {
+      // The redirect still works if session storage is unavailable.
+    }
+    router.replace("/");
   }, [authReady, currentUser, pathname, router]);
 
   const currentPageTitle = useMemo(

@@ -7,11 +7,12 @@ import { InteractiveCommerceVisual } from "@/components/InteractiveCommerceVisua
 import { LoginModal } from "@/components/LoginModal";
 import { readStoredUser } from "@/lib/permissions";
 
-export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?: boolean }) {
+export function PublicLanding() {
   const router = useRouter();
-  const [loginOpen, setLoginOpen] = useState(defaultLoginOpen);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUserName, setCurrentUserName] = useState("");
+  const [accessNotice, setAccessNotice] = useState("");
 
   useEffect(() => {
     const user = readStoredUser();
@@ -19,8 +20,17 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
 
     setIsLoggedIn(loggedIn);
     setCurrentUserName(user?.display_name ?? user?.email ?? "");
-    setLoginOpen(defaultLoginOpen && !loggedIn);
-  }, [defaultLoginOpen]);
+
+    try {
+      const notice = window.sessionStorage.getItem("baico_access_notice");
+      if (notice) {
+        setAccessNotice(notice);
+        window.sessionStorage.removeItem("baico_access_notice");
+      }
+    } catch {
+      // Session storage is optional; the landing page still works without it.
+    }
+  }, []);
 
   function handleOpenOperations() {
     if (isLoggedIn) {
@@ -63,6 +73,11 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
             <p className="mt-6 max-w-2xl text-base leading-8 text-teal-50/78">
               从店铺授权开始读取真实订单、商品和库存，再沉淀为任务、审批、库存、利润和运营复盘，让团队每天先处理最重要的事项。
             </p>
+            {accessNotice ? (
+              <div className="mt-4 inline-flex rounded-md border border-amber-200/40 bg-amber-100/12 px-3 py-2 text-sm font-medium text-amber-50">
+                {accessNotice}
+              </div>
+            ) : null}
             {isLoggedIn && currentUserName ? (
               <p className="mt-4 text-sm font-medium text-emerald-100">当前已登录：{currentUserName}</p>
             ) : null}
