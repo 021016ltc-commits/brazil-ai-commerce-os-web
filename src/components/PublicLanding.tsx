@@ -11,12 +11,16 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
   const router = useRouter();
   const [loginOpen, setLoginOpen] = useState(defaultLoginOpen);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState("");
 
   useEffect(() => {
     const user = readStoredUser();
-    setIsLoggedIn(Boolean(user));
-    if (defaultLoginOpen && user) router.replace("/dashboard");
-  }, [defaultLoginOpen, router]);
+    const loggedIn = Boolean(user);
+
+    setIsLoggedIn(loggedIn);
+    setCurrentUserName(user?.display_name ?? user?.email ?? "");
+    setLoginOpen(defaultLoginOpen && !loggedIn);
+  }, [defaultLoginOpen]);
 
   function handleOpenOperations() {
     if (isLoggedIn) {
@@ -25,6 +29,8 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
     }
     setLoginOpen(true);
   }
+
+  const entryLabel = isLoggedIn ? "进入系统" : "注册/登录";
 
   return (
     <main className="min-h-screen bg-[#052f2c]">
@@ -39,10 +45,10 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
             </div>
             <button
               type="button"
-              onClick={() => setLoginOpen(true)}
+              onClick={handleOpenOperations}
               className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md bg-white px-4 text-sm font-semibold text-[#064e49] shadow-sm hover:bg-teal-50"
             >
-              注册/登录
+              {entryLabel}
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </header>
@@ -57,14 +63,17 @@ export function PublicLanding({ defaultLoginOpen = false }: { defaultLoginOpen?:
             <p className="mt-6 max-w-2xl text-base leading-8 text-teal-50/78">
               从店铺授权开始读取真实订单、商品和库存，再沉淀为任务、审批、库存、利润和运营复盘，让团队每天先处理最重要的事项。
             </p>
+            {isLoggedIn && currentUserName ? (
+              <p className="mt-4 text-sm font-medium text-emerald-100">当前已登录：{currentUserName}</p>
+            ) : null}
 
             <div className="mt-8 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => setLoginOpen(true)}
+                onClick={handleOpenOperations}
                 className="inline-flex h-11 items-center gap-2 rounded-md bg-[#14b8a6] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0f766e]"
               >
-                注册/登录
+                {entryLabel}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
               <button

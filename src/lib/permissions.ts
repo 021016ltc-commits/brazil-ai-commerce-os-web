@@ -3,6 +3,27 @@ import { zhCN } from "@/locales/zh-CN";
 
 export const localUserStorageKey = "baico_current_user";
 
+const loginStateStorageKeys = [
+  localUserStorageKey,
+  "currentUser",
+  "loginUser",
+  "operationUser",
+  "authUser",
+  "sessionUser",
+  "selectedUser",
+  "rememberedUser",
+  "baico_login_user",
+  "baico_operation_user",
+  "baico_auth_user",
+  "baico_session_user",
+  "baico_selected_user",
+  "isLoggedIn",
+  "token",
+  "session",
+  "role",
+  "permission",
+];
+
 export const roleLabels: Record<UserRoleName, string> = {
   admin: zhCN.roles.admin,
   operator: zhCN.roles.operator,
@@ -92,6 +113,24 @@ export function storeLocalUser(user: UserItem) {
 }
 
 export function clearLocalUser() {
-  window.localStorage.removeItem(localUserStorageKey);
+  loginStateStorageKeys.forEach((key) => {
+    try {
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Browser storage can be unavailable in strict privacy modes.
+    }
+  });
+
+  try {
+    document.cookie.split(";").forEach((cookie) => {
+      const cookieName = cookie.split("=")[0]?.trim();
+      if (!cookieName || !/(user|session|auth|token|login)/i.test(cookieName)) return;
+      document.cookie = `${cookieName}=; Max-Age=0; path=/`;
+    });
+  } catch {
+    // Cookie cleanup is best-effort because this app primarily uses local storage.
+  }
+
   window.dispatchEvent(new Event("baico-auth-change"));
 }

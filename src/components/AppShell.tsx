@@ -327,7 +327,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
 
     clearLocalUser();
-    router.push("/login");
+    router.push("/");
   };
 
   if (!authReady || !currentUser) {
