@@ -12,6 +12,7 @@ import {
 import { StatusPill } from "@/components/StatusPill";
 import { InventoryExperienceCharts } from "@/components/InventoryExperienceCharts";
 import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyInventoryResponse } from "@/data/emptyResponses";
 import { formatBrl } from "@/lib/format";
 import { riskTypeLabel } from "@/locales/zh-CN";
@@ -230,6 +231,12 @@ export default function InventoryPage() {
   }, [data.reorder_recommendations, platformFilter, reorderMap, riskFilter, riskMap, sortBy, stockMap, stockStatusFilter]);
 
   const snapshot = data.snapshot;
+  const hasInventoryData =
+    data.inventory_stock.length > 0 ||
+    data.inventory_risks.length > 0 ||
+    data.reorder_recommendations.length > 0 ||
+    snapshot.total_inventory_value > 0 ||
+    snapshot.stock_health_score > 0;
 
   return (
     <div className="space-y-6">
@@ -278,6 +285,8 @@ export default function InventoryPage() {
           </div>
         </div>
       </section>
+
+      <RealDataReadiness context="inventory" isEmpty={!hasInventoryData} />
 
       <section className="space-y-5">
         <SectionHeader

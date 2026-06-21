@@ -12,6 +12,7 @@ import {
 import { StatusPill } from "@/components/StatusPill";
 import { ProfitExperienceCharts } from "@/components/ProfitExperienceCharts";
 import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyProfitResponse } from "@/data/emptyResponses";
 import { formatBrl, formatPercent } from "@/lib/format";
 import type { Platform, ProductProfitItem, ProfitApiResponse } from "@/types";
@@ -109,6 +110,12 @@ export default function ProfitPage() {
   const risk = data.profit_risk;
   const topCostShare = data.cost_structure.reduce((max, item) => Math.max(max, item.share), 0);
   const abnormalProfitCount = risk.loss_products + risk.low_profit_products + risk.high_risk_products;
+  const hasProfitData =
+    data.product_profit.length > 0 ||
+    data.cost_structure.length > 0 ||
+    snapshot.yesterday_net_profit !== 0 ||
+    snapshot.month_net_profit !== 0 ||
+    snapshot.cash_flow !== 0;
 
   return (
     <div className="space-y-6">
@@ -157,6 +164,8 @@ export default function ProfitPage() {
           </div>
         </div>
       </section>
+
+      <RealDataReadiness context="profit" isEmpty={!hasProfitData} />
 
       <section className="space-y-5">
         <SectionHeader

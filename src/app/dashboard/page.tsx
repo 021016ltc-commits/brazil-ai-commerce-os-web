@@ -19,6 +19,7 @@ import {
   type ChartPoint,
 } from "@/components/Charts";
 import { ColumnSettingsNote, CompactMetricCard, MoreActionsMenu } from "@/components/OperatorControls";
+import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { emptyDashboardResponse, emptyTasksResponse } from "@/data/emptyResponses";
@@ -99,6 +100,13 @@ export default function DashboardPage() {
   const recommendedActions = summary.opportunity_and_risk.recommended_actions.slice(0, 4);
   const todayGmv = Math.max(taskData.impact_stats.total_gmv_impact, summary.business_impact.total_profit_impact * 3);
   const lastUpdated = summary.system_status.last_updated_at || "刚刚";
+  const hasOperatingData =
+    dashboardData.products.length > 0 ||
+    taskData.overview.total_tasks > 0 ||
+    summary.profit_and_cash.yesterday_net_profit !== 0 ||
+    summary.profit_and_cash.month_net_profit !== 0 ||
+    summary.inventory_risk.stock_health_score > 0 ||
+    summary.inventory_risk.stockout_risk_count > 0;
 
   const chartData = useMemo(() => {
     const labels = ["周一", "周二", "周三", "周四", "周五", "今日"];
@@ -166,6 +174,8 @@ export default function DashboardPage() {
       ) : null}
 
       {isLoading ? <LoadingState /> : null}
+
+      {!isLoading ? <RealDataReadiness context="dashboard" isEmpty={!hasOperatingData} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <CompactMetricCard

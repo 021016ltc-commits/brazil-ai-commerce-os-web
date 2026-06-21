@@ -17,6 +17,7 @@ import {
   Target,
 } from "lucide-react";
 import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyTasksResponse } from "@/data/emptyResponses";
 import type {
   TaskPriority,
@@ -331,6 +332,7 @@ export default function TasksPage() {
   const highTasks = filteredTasks.filter((task) => task.priority === "high");
   const mediumTasks = filteredTasks.filter((task) => task.priority === "medium");
   const lowTasks = filteredTasks.filter((task) => task.priority === "low");
+  const hasTaskData = data.overview.total_tasks > 0 || data.all_tasks.length > 0;
 
   const sourceChartItems = [
     { label: "库存中心", value: data.source_stats.inventory_tasks, color: "bg-forest" },
@@ -386,6 +388,8 @@ export default function TasksPage() {
           </div>
         </div>
       </section>
+
+      <RealDataReadiness context="tasks" isEmpty={!hasTaskData} />
 
       <section className="space-y-5">
         <SectionHeader

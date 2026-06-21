@@ -1722,3 +1722,26 @@ Then open:
 Full deployment guide:
 
 - `DEPLOYMENT.md`
+
+## Real data readiness
+
+While the Shopee Open Platform profile is under review, the core operating pages stay in real-data mode and do not fill the system with fake operating results.
+
+Updated pages:
+
+- `/dashboard`
+- `/tasks`
+- `/profit`
+- `/inventory`
+
+Behavior:
+
+- If no authorized shop or no synced shop data is available, the page shows a business-ready state with the next step: go to Store Authorization.
+- If a shop is authorized but has not completed the first read-only sync, the page guides the operator to sync real orders, products, and inventory.
+- If real shop data is available, the readiness block disappears and the page shows operating data.
+
+Operating rule:
+
+- Shopee access remains read-only.
+- The system does not change prices, stock, listings, ads, orders, payments, or shipping.
+- Every platform shop should be authorized separately so future operating analysis can be traced by platform, shop, owner, and notes.
