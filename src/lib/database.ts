@@ -41,8 +41,7 @@ function databaseUrl() {
 }
 
 async function importPgModule(): Promise<PgModuleLike> {
-  const importer = new Function("return import('pg')");
-  return importer() as Promise<PgModuleLike>;
+  return import("pg") as Promise<PgModuleLike>;
 }
 
 export async function connectPostgres(): Promise<Extract<DatabaseClient, { mode: "postgres" }>> {
