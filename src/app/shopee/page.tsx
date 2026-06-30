@@ -182,6 +182,7 @@ export default function ShopeePage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [savingShopId, setSavingShopId] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [manualCallbackUrl, setManualCallbackUrl] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
 
   const refreshData = useCallback(async () => {
@@ -321,14 +322,34 @@ export default function ShopeePage() {
     if (!canAuthorizeShopee || !binding.auth_url) return;
 
     const authUrl = new URL(binding.auth_url, window.location.origin).toString();
-    const popup = window.open(
-      authUrl,
-      "baico-store-authorization",
-      "width=980,height=780",
-    );
+    window.location.href = authUrl;
+  }
 
-    if (!popup) {
-      window.location.href = authUrl;
+  function handleManualCallbackSubmit() {
+    const value = manualCallbackUrl.trim();
+    if (!value) {
+      setAuthNotice("请粘贴 Shopee 授权完成后的完整浏览器地址。");
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(value);
+      const code = parsedUrl.searchParams.get("code");
+      if (!code) {
+        setAuthNotice("这个链接里没有授权 code，请粘贴授权完成后的回跳链接。");
+        return;
+      }
+
+      const callbackUrl = new URL("/api/shopee/auth/callback", window.location.origin);
+      ["code", "shop_id", "shop_id_list", "shop_ids", "main_account_id", "merchant_id", "state", "random"].forEach(
+        (key) => {
+          const param = parsedUrl.searchParams.get(key);
+          if (param) callbackUrl.searchParams.set(key === "random" ? "state" : key, param);
+        },
+      );
+      window.location.href = callbackUrl.toString();
+    } catch {
+      setAuthNotice("授权链接格式不正确，请复制完整浏览器地址。");
     }
   }
 
@@ -479,6 +500,27 @@ export default function ShopeePage() {
               <>
                 <div className="rounded-md border border-line bg-slate-50 px-3 py-2">
                   授权后系统只读取真实数据，不会改价、上架、发货、改库存或操作广告。
+                </div>
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber">
+                  授权会在当前页面打开 Shopee。完成后如果没有自动回到系统，请复制授权完成后的地址，粘贴到下面保存。
+                </div>
+                <div className="space-y-2 rounded-md border border-line bg-white p-3">
+                  <label className="block text-xs font-semibold text-slate-500">手动保存授权回调链接</label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      value={manualCallbackUrl}
+                      onChange={(event) => setManualCallbackUrl(event.target.value)}
+                      placeholder="粘贴包含 code 和 shop_id 的 Shopee 回跳链接"
+                      className="min-h-9 flex-1 rounded-md border border-line px-3 text-sm text-ink outline-none focus:border-teal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleManualCallbackSubmit}
+                      className="inline-flex h-9 items-center justify-center rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink hover:bg-slate-50"
+                    >
+                      保存授权
+                    </button>
+                  </div>
                 </div>
                 {!binding.configured ? (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber">
