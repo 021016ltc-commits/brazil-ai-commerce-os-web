@@ -68,6 +68,16 @@ import {
   getShopeeConsistencyReport as getShopeeConsistencyReportFromEngine,
   getShopeeSyncStatus as getShopeeSyncStatusFromEngine,
 } from "@/lib/connectors/shopeeSyncEngine";
+import {
+  getRealShopeeAnalysisResponse,
+  getRealShopeeDashboardResponse,
+  getRealShopeeDailyOpsResponse,
+  getRealShopeeInventoryResponse,
+  getRealShopeeOpportunitiesResponse,
+  getRealShopeeProductsResponse,
+  getRealShopeeProfitResponse,
+  getRealShopeeTasksResponse,
+} from "@/lib/realShopeeBusiness";
 import { getSelfOptimizationAnalysisResponse, getSelfOptimizationRecommendationsResponse, getSelfOptimizationResponse } from "@/lib/selfOptimizationRepository";
 import { getSystemHealthResponse } from "@/lib/systemHealth";
 import {
@@ -105,9 +115,18 @@ function clearBusinessCaches() {
   clearCache(`${currentTenantId()}:`);
 }
 
+async function realShopeeOrLocal<T>(
+  realGetter: () => Promise<T | null>,
+  localGetter: () => Promise<T>,
+) {
+  const realResponse = await realGetter();
+  if (realResponse) return realResponse;
+  return localGetter();
+}
+
 export const dataService = {
   getProducts() {
-    return getProductsResponse();
+    return realShopeeOrLocal(getRealShopeeProductsResponse, getProductsResponse);
   },
 
   getOrders() {
@@ -115,11 +134,15 @@ export const dataService = {
   },
 
   getInventory() {
-    return withApiCache(cacheKey("inventory"), shortTtlMs, getInventoryResponse);
+    return withApiCache(cacheKey("inventory"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeInventoryResponse, getInventoryResponse),
+    );
   },
 
   getTasks() {
-    return withApiCache(cacheKey("tasks"), shortTtlMs, getTasksResponse);
+    return withApiCache(cacheKey("tasks"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeTasksResponse, getTasksResponse),
+    );
   },
 
   getUsers() {
@@ -131,19 +154,27 @@ export const dataService = {
   },
 
   getDashboardSummary() {
-    return withApiCache(cacheKey("dashboard-summary"), shortTtlMs, getDashboardSummaryResponse);
+    return withApiCache(cacheKey("dashboard-summary"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeDashboardResponse, getDashboardSummaryResponse),
+    );
   },
 
   getProfit() {
-    return withApiCache(cacheKey("profit"), mediumTtlMs, getProfitResponse);
+    return withApiCache(cacheKey("profit"), mediumTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeProfitResponse, getProfitResponse),
+    );
   },
 
   getOpportunities() {
-    return getOpportunitiesResponse();
+    return withApiCache(cacheKey("opportunities"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeOpportunitiesResponse, getOpportunitiesResponse),
+    );
   },
 
   getAnalysis() {
-    return getAnalysisResponse();
+    return withApiCache(cacheKey("analysis"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeAnalysisResponse, getAnalysisResponse),
+    );
   },
 
   getApprovals() {
@@ -370,7 +401,9 @@ export const dataService = {
   },
 
   getDailyOps() {
-    return getDailyOpsResponse();
+    return withApiCache(cacheKey("daily-ops"), shortTtlMs, () =>
+      realShopeeOrLocal(getRealShopeeDailyOpsResponse, getDailyOpsResponse),
+    );
   },
 
   postDecisionFeedback(input: DecisionFeedbackInput) {
