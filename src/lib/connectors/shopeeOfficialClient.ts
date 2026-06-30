@@ -336,44 +336,101 @@ function productToInventory(item: ShopeeProduct): ShopeeInventoryItem {
   };
 }
 
+function maxSyncItems() {
+  const configured = Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? 1000);
+  return Math.max(50, Math.min(5000, Number.isFinite(configured) ? configured : 1000));
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 async function fetchOfficialOrders(binding: ShopeeShopBinding): Promise<ShopeeOrder[]> {
   const timeTo = nowSeconds();
   const days = Math.max(1, Math.min(14, Number(process.env.SHOPEE_ORDER_SYNC_DAYS ?? 14)));
   const timeFrom = timeTo - days * 24 * 60 * 60;
+  const orderSns: string[] = [];
+  const maxItems = maxSyncItems();
+  let cursor = "";
 
-  const listPayload = await officialGet("/api/v2/order/get_order_list", binding, {
-    time_range_field: "create_time",
-    time_from: timeFrom,
-    time_to: timeTo,
-    page_size: 50,
-  });
-  const orderList = nestedArray(listPayload, "order_list");
-  const orderSns = orderList.map((item) => asString(item.order_sn ?? item.order_id)).filter(Boolean).slice(0, 50);
-  if (orderSns.length === 0) return [];
+  while (orderSns.length < maxItems) {
+    const listPayload = await officialGet("/api/v2/order/get_order_list", binding, {
+      time_range_field: "create_time",
+      time_from: timeFrom,
+      time_to: timeTo,
+      page_size: 50,
+      cursor,
+    });
+    const orderList = nestedArray(listPayload, "order_list");
+    orderSns.push(...orderList.map((item) => asString(item.order_sn ?? item.order_id)).filter(Boolean));
 
-  const detailPayload = await officialGet("/api/v2/order/get_order_detail", binding, {
-    order_sn_list: orderSns.join(","),
-    response_optional_fields: "item_list,total_amount,order_status,create_time",
-  });
-  return nestedArray(detailPayload, "order_list").map(normalizeOfficialOrder).filter((item) => item.order_id);
+    const response = asRecord(listPayload.response);
+    const more = Boolean(response.more ?? listPayload.more);
+    const nextCursor = asString(response.next_cursor ?? listPayload.next_cursor);
+    if (!more || !nextCursor) break;
+    cursor = nextCursor;
+  }
+
+  const uniqueOrderSns = Array.from(new Set(orderSns)).slice(0, maxItems);
+  if (uniqueOrderSns.length === 0) return [];
+
+  const details = await Promise.all(
+    chunk(uniqueOrderSns, 50).map((orderSnChunk) =>
+      officialGet("/api/v2/order/get_order_detail", binding, {
+        order_sn_list: orderSnChunk.join(","),
+        response_optional_fields: "item_list,total_amount,order_status,create_time",
+      }),
+    ),
+  );
+
+  return details
+    .flatMap((detailPayload) => nestedArray(detailPayload, "order_list"))
+    .map(normalizeOfficialOrder)
+    .filter((item) => item.order_id);
 }
 
 async function fetchOfficialProducts(binding: ShopeeShopBinding): Promise<ShopeeProduct[]> {
-  const listPayload = await officialGet("/api/v2/product/get_item_list", binding, {
-    offset: 0,
-    page_size: 50,
-    item_status: "NORMAL",
-  });
-  const itemList = nestedArray(listPayload, "item");
-  const itemIds = itemList.map((item) => asString(item.item_id ?? item.product_id)).filter(Boolean).slice(0, 50);
-  if (itemIds.length === 0) return [];
+  const itemIds: string[] = [];
+  const maxItems = maxSyncItems();
+  let offset = 0;
 
-  const detailPayload = await officialGet("/api/v2/product/get_item_base_info", binding, {
-    item_id_list: itemIds.join(","),
-    need_tax_info: "false",
-    need_complaint_policy: "false",
-  });
-  return nestedArray(detailPayload, "item_list").map(normalizeOfficialProduct).filter((item) => item.product_id);
+  while (itemIds.length < maxItems) {
+    const listPayload = await officialGet("/api/v2/product/get_item_list", binding, {
+      offset,
+      page_size: 50,
+      item_status: "NORMAL",
+    });
+    const itemList = nestedArray(listPayload, "item");
+    itemIds.push(...itemList.map((item) => asString(item.item_id ?? item.product_id)).filter(Boolean));
+
+    const response = asRecord(listPayload.response);
+    const hasNextPage = Boolean(response.has_next_page ?? listPayload.has_next_page);
+    const nextOffset = asNumber(response.next_offset ?? listPayload.next_offset, offset + 50);
+    if (!hasNextPage || nextOffset <= offset) break;
+    offset = nextOffset;
+  }
+
+  const uniqueItemIds = Array.from(new Set(itemIds)).slice(0, maxItems);
+  if (uniqueItemIds.length === 0) return [];
+
+  const details = await Promise.all(
+    chunk(uniqueItemIds, 50).map((itemIdChunk) =>
+      officialGet("/api/v2/product/get_item_base_info", binding, {
+        item_id_list: itemIdChunk.join(","),
+        need_tax_info: "false",
+        need_complaint_policy: "false",
+      }),
+    ),
+  );
+
+  return details
+    .flatMap((detailPayload) => nestedArray(detailPayload, "item_list"))
+    .map(normalizeOfficialProduct)
+    .filter((item) => item.product_id);
 }
 
 async function fetchOfficialShopeeReadOnlyDataForBinding(input: ShopeeShopBinding): Promise<OfficialShopeePayload> {
