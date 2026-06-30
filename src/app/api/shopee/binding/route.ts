@@ -95,6 +95,34 @@ function buildReadiness(params: {
   };
 }
 
+function mergeBindingStatuses(
+  primary: ShopeeBindingPublicStatus,
+  secondary: ShopeeBindingPublicStatus | null,
+): ShopeeBindingPublicStatus {
+  if (!secondary?.shops?.length) return primary;
+
+  const shopsById = new Map(primary.shops.map((shop) => [shop.shop_id, shop]));
+  secondary.shops.forEach((shop) => {
+    if (!shopsById.has(shop.shop_id)) shopsById.set(shop.shop_id, shop);
+  });
+
+  const shops = Array.from(shopsById.values());
+  const preferred = shops.find((shop) => shop.status === "bound") ?? shops[0] ?? null;
+
+  return {
+    ...primary,
+    bound: primary.bound || secondary.bound,
+    status: primary.bound ? primary.status : secondary.status,
+    shop_id: primary.shop_id ?? secondary.shop_id ?? preferred?.shop_id ?? null,
+    shop_name: primary.shop_name ?? secondary.shop_name ?? preferred?.shop_name ?? null,
+    region: primary.region ?? secondary.region ?? preferred?.region ?? null,
+    token_expire_at: primary.token_expire_at ?? secondary.token_expire_at ?? preferred?.token_expire_at ?? null,
+    last_sync_at: primary.last_sync_at ?? secondary.last_sync_at ?? preferred?.last_sync_at ?? null,
+    message: primary.bound ? primary.message : secondary.message,
+    shops,
+  };
+}
+
 export async function GET(request: Request) {
   const tenantId = tenantIdFromRequest(request);
   const origin = new URL(request.url).origin;
@@ -107,9 +135,13 @@ export async function GET(request: Request) {
       }
 
       try {
-        return await getShopeeProxyBindingStatus("/api/shopee/auth/start");
+        const proxyBinding = await getShopeeProxyBindingStatus("/api/shopee/auth/start");
+        const localBinding = await getShopeeBindingStatus("/api/shopee/auth/start").catch(() => null);
+        return mergeBindingStatuses(proxyBinding, localBinding);
       } catch (error) {
         logApiError("/api/shopee/binding/proxy", error);
+        const localBinding = await getShopeeBindingStatus("/api/shopee/auth/start").catch(() => null);
+        if (localBinding?.shops?.length) return localBinding;
         return fallbackBindingStatus("固定 IP 只读代理暂时不可用，店铺授权状态暂不可读。");
       }
     });

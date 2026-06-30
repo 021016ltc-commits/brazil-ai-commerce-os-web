@@ -134,6 +134,15 @@ function bindingTone(status: PlatformShopBindingPublicItem["status"]) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
+function authFailureMessage(reason: string | null, detail: string | null) {
+  const suffix = detail ? ` 失败原因：${detail}` : "";
+  if (reason === "missing_code") return `Shopee 没有返回授权码，请重新发起授权。${suffix}`;
+  if (reason === "missing_shop_id") return `Shopee 没有返回店铺编号，请确认选择的是店铺授权。${suffix}`;
+  if (reason === "state_mismatch") return `授权会话已过期，请重新点击授权。${suffix}`;
+  if (reason === "token_exchange_failed") return `授权码已返回，但换取访问令牌失败。${suffix}`;
+  return `店铺授权未完成，请稍后重试。${suffix}`;
+}
+
 function KpiCard({
   label,
   value,
@@ -267,13 +276,15 @@ export default function ShopeePage() {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("binding");
     if (!status) return;
+    const reason = params.get("reason");
+    const detail = params.get("detail");
 
     const message =
       status === "success"
         ? "店铺授权成功，正在刷新授权列表。"
         : status === "not_configured"
           ? "平台授权参数尚未配置完整。"
-          : "店铺授权未完成，请稍后重试。";
+          : authFailureMessage(reason, detail);
 
     setAuthNotice(message);
 

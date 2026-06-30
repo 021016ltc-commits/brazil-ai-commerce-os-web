@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   exchangeShopeeCodeForToken,
+  officialShopeeConfigured,
   shopeeOAuthCookieName,
 } from "@/lib/connectors/shopeeOfficialClient";
 import { exchangeShopeeProxyCodeForToken, shopeeProxyConfigured } from "@/lib/connectors/shopeeProxyClient";
@@ -11,10 +12,11 @@ import { recordOperationLog } from "@/lib/users";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function redirectToShopee(request: NextRequest, status: string, reason?: string) {
+function redirectToShopee(request: NextRequest, status: string, reason?: string, detail?: string) {
   const target = new URL("/shopee", request.url);
   target.searchParams.set("binding", status);
   if (reason) target.searchParams.set("reason", reason);
+  if (detail) target.searchParams.set("detail", detail);
   return NextResponse.redirect(target);
 }
 
@@ -64,6 +66,42 @@ function resolveShopId(url: URL) {
 
 function safeParamKeys(url: URL) {
   return Array.from(url.searchParams.keys()).filter((key) => key !== "code");
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown Shopee authorization error.";
+}
+
+function publicFailureDetail(error: unknown) {
+  const message = errorMessage(error)
+    .replace(/[A-Za-z0-9_-]{24,}/g, "[hidden]")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!message) return "授权服务没有返回明确原因。";
+  return message.slice(0, 180);
+}
+
+async function exchangeCodeForBinding(params: { code: string; shop_id: string }) {
+  const errors: string[] = [];
+
+  if (shopeeProxyConfigured()) {
+    try {
+      return await exchangeShopeeProxyCodeForToken(params);
+    } catch (error) {
+      errors.push(`固定 IP 代理：${errorMessage(error)}`);
+    }
+  }
+
+  if (officialShopeeConfigured()) {
+    try {
+      return await exchangeShopeeCodeForToken(params);
+    } catch (error) {
+      errors.push(`官方接口直连：${errorMessage(error)}`);
+    }
+  }
+
+  throw new Error(errors.length ? errors.join("；") : "Shopee token exchange is not configured.");
 }
 
 async function recordCallbackIssue(params: {
@@ -144,9 +182,7 @@ export async function GET(request: NextRequest) {
 
   try {
     await withTenant(tenantId, () =>
-      shopeeProxyConfigured()
-        ? exchangeShopeeProxyCodeForToken({ code, shop_id: shopId })
-        : exchangeShopeeCodeForToken({ code, shop_id: shopId }),
+      exchangeCodeForBinding({ code, shop_id: shopId }),
     );
     const response = redirectToShopee(request, "success");
     response.cookies.delete(shopeeOAuthCookieName());
@@ -165,12 +201,12 @@ export async function GET(request: NextRequest) {
         status: "failed",
         metadata: {
           shop_id: shopId,
-          error: error instanceof Error ? error.message : "Unknown Shopee authorization error.",
+          error: errorMessage(error),
         },
       }),
     ).catch(() => undefined);
 
-    const response = redirectToShopee(request, "failed", "token_exchange_failed");
+    const response = redirectToShopee(request, "failed", "token_exchange_failed", publicFailureDetail(error));
     response.cookies.delete(shopeeOAuthCookieName());
     response.cookies.delete("baico_shopee_oauth_tenant");
     return response;
