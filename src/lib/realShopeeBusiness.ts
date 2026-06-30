@@ -201,6 +201,13 @@ function aggregateProducts(
   });
 }
 
+function totalOrderRevenue(orders: RealOrder[]) {
+  return orders.reduce((sum, order) => {
+    const quantity = Math.max(1, safeNumber(order.quantity || 1));
+    return sum + safeNumber(order.price) * quantity;
+  }, 0);
+}
+
 function buildProducts(agg: ProductAgg[], generatedAt: string): Product[] {
   return agg.map((item) => ({
     product_uid: item.productUid,
@@ -227,8 +234,10 @@ function buildProfit(
   inventorySnapshot: InventorySnapshot,
   generatedAt: string,
   source: ShopeeDataSource,
+  fallbackRevenue = 0,
 ): ProfitApiResponse {
-  const totalRevenue = agg.reduce((sum, item) => sum + item.revenue, 0);
+  const productRevenue = agg.reduce((sum, item) => sum + item.revenue, 0);
+  const totalRevenue = productRevenue > 0 ? productRevenue : fallbackRevenue;
   const productProfit: ProductProfitItem[] = agg.slice(0, 50).map((item) => ({
     profit_item_id: `profit_real_${item.productId}`,
     product_uid: item.productUid,
@@ -686,8 +695,10 @@ function buildDashboard(
   tasks: TasksApiResponse,
   generatedAt: string,
   source: ShopeeDataSource,
+  fallbackGmv = 0,
 ): DashboardSummaryApiResponse {
-  const totalGmv = agg.reduce((sum, item) => sum + item.revenue, 0);
+  const productGmv = agg.reduce((sum, item) => sum + item.revenue, 0);
+  const totalGmv = productGmv > 0 ? productGmv : fallbackGmv;
   const highRiskCount =
     inventory.inventory_risks.filter((item) => item.risk_level === "high").length +
     opportunities.risk_alerts.filter((item) => item.risk_level === "high").length;
@@ -947,13 +958,14 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
       : ordersResponse.source;
 
   const productAgg = aggregateProducts(orders, productsRaw, inventoryRaw);
+  const orderRevenue = totalOrderRevenue(orders);
   const products = buildProducts(productAgg, generatedAt);
   const inventory = buildInventory(productAgg, generatedAt, source);
-  const profit = buildProfit(productAgg, inventory.snapshot, generatedAt, source);
+  const profit = buildProfit(productAgg, inventory.snapshot, generatedAt, source, orderRevenue);
   const opportunities = buildOpportunities(products, productAgg, inventory, source);
   const analysis = buildAnalysis(opportunities, inventory, source);
   const tasks = buildTasks(productAgg, inventory, opportunities, analysis, source);
-  const dashboard = buildDashboard(products, productAgg, profit, inventory, opportunities, analysis, tasks, generatedAt, source);
+  const dashboard = buildDashboard(products, productAgg, profit, inventory, opportunities, analysis, tasks, generatedAt, source, orderRevenue);
   const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt, source);
 
   return {

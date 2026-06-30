@@ -51,7 +51,7 @@ function statusLabel(status: string) {
 }
 
 function dataSourceLabel(source: ApiHealthCheckItem["data_source"] | SystemHealthApiResponse["source"]) {
-  if (source === "sqlite") return "数据正常";
+  if (source === "sqlite" || source === "shopee_api") return "数据正常";
   if (source === "mock") return "测试数据";
   return "待确认";
 }

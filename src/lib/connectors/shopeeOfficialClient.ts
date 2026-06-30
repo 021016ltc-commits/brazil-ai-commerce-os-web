@@ -37,6 +37,14 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function firstNumber(values: unknown[], fallback = 0) {
+  for (const value of values) {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return fallback;
+}
+
 function asRecord(value: unknown): ShopeeJson {
   return value && typeof value === "object" ? (value as ShopeeJson) : {};
 }
@@ -286,36 +294,85 @@ async function officialGet(path: string, binding: ShopeeShopBinding, query: Reco
   return fetchShopeeJson(url, { method: "GET" });
 }
 
-function normalizeOfficialOrder(order: ShopeeJson): ShopeeOrder {
-  const item = asArray(order.item_list)[0] ?? {};
-  const productId = asString(item.item_id ?? item.product_id ?? item.itemId);
-  const sku = asString(item.model_sku ?? item.item_sku ?? item.sku);
-  const quantity = asNumber(item.model_quantity_purchased ?? item.quantity ?? order.quantity, 1);
-  const price = asNumber(item.model_discounted_price ?? item.model_original_price ?? order.total_amount ?? order.price);
+function normalizeOfficialOrderLines(order: ShopeeJson): ShopeeOrder[] {
+  const items = asArray(order.item_list);
+  const orderId = asString(order.order_sn ?? order.order_id);
   const createdAt = asNumber(order.create_time) > 0
     ? new Date(asNumber(order.create_time) * 1000).toISOString()
     : asString(order.created_at, nowIso());
+  const orderStatus = asString(order.order_status ?? order.status, "unknown");
+  const orderTotal = firstNumber([order.total_amount, order.order_amount, order.price], 0);
 
-  return {
-    order_id: asString(order.order_sn ?? order.order_id),
-    product_id: productId,
-    sku,
-    quantity,
-    price,
-    order_status: asString(order.order_status ?? order.status, "unknown"),
-    created_at: createdAt,
-  };
+  if (items.length === 0) {
+    return [
+      {
+        order_id: orderId,
+        product_id: "",
+        sku: "",
+        quantity: 1,
+        price: orderTotal,
+        order_status: orderStatus,
+        created_at: createdAt,
+      },
+    ];
+  }
+
+  return items.map((item, index) => {
+    const productId = asString(item.item_id ?? item.product_id ?? item.itemId);
+    const modelId = asString(item.model_id ?? item.variation_id);
+    const sku = asString(item.model_sku ?? item.item_sku ?? item.sku ?? modelId ?? productId);
+    const quantity = Math.max(1, firstNumber([item.model_quantity_purchased, item.quantity, item.item_quantity, order.quantity], 1));
+    const price = firstNumber(
+      [
+        item.model_discounted_price,
+        item.model_original_price,
+        item.discounted_price,
+        item.original_price,
+        item.item_price,
+        item.price,
+        items.length > 0 ? orderTotal / items.length : orderTotal,
+      ],
+      0,
+    );
+    const lineId = [orderId, productId || "item", modelId || sku || index].filter(Boolean).join(":");
+
+    return {
+      order_id: lineId,
+      product_id: productId,
+      sku,
+      quantity,
+      price,
+      order_status: orderStatus,
+      created_at: createdAt,
+    };
+  });
 }
 
 function stockFromItem(item: ShopeeJson) {
   const stockInfo = asRecord(item.stock_info_v2);
   const summary = asRecord(stockInfo.summary_info);
-  return asNumber(summary.total_available_stock ?? summary.normal_stock ?? item.stock ?? item.normal_stock);
+  return firstNumber([
+    summary.total_available_stock,
+    summary.normal_stock,
+    summary.seller_stock,
+    item.stock,
+    item.normal_stock,
+    item.current_stock,
+    item.available_stock,
+  ]);
 }
 
 function priceFromItem(item: ShopeeJson) {
   const priceInfo = asArray(item.price_info)[0] ?? {};
-  return asNumber(priceInfo.current_price ?? priceInfo.original_price ?? item.price);
+  return firstNumber([
+    priceInfo.current_price,
+    priceInfo.original_price,
+    priceInfo.price,
+    priceInfo.discounted_price,
+    item.current_price,
+    item.original_price,
+    item.price,
+  ]);
 }
 
 function normalizeOfficialProduct(item: ShopeeJson): ShopeeProduct {
@@ -382,14 +439,14 @@ async function fetchOfficialOrders(binding: ShopeeShopBinding): Promise<ShopeeOr
     chunk(uniqueOrderSns, 50).map((orderSnChunk) =>
       officialGet("/api/v2/order/get_order_detail", binding, {
         order_sn_list: orderSnChunk.join(","),
-        response_optional_fields: "item_list,total_amount,order_status,create_time",
+        response_optional_fields: "item_list,total_amount,order_status,create_time,pay_time,update_time",
       }),
     ),
   );
 
   return details
     .flatMap((detailPayload) => nestedArray(detailPayload, "order_list"))
-    .map(normalizeOfficialOrder)
+    .flatMap(normalizeOfficialOrderLines)
     .filter((item) => item.order_id);
 }
 
@@ -421,6 +478,7 @@ async function fetchOfficialProducts(binding: ShopeeShopBinding): Promise<Shopee
     chunk(uniqueItemIds, 50).map((itemIdChunk) =>
       officialGet("/api/v2/product/get_item_base_info", binding, {
         item_id_list: itemIdChunk.join(","),
+        response_optional_fields: "price_info,stock_info_v2,sales_info,item_name,item_sku,item_status,description,brand",
         need_tax_info: "false",
         need_complaint_policy: "false",
       }),

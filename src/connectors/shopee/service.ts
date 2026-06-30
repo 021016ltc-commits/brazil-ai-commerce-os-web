@@ -50,33 +50,48 @@ function latestSyncedAt(rows: Array<{ synced_at?: string | null }>) {
     .at(-1) ?? null;
 }
 
-function normalizeOrder(value: Partial<ShopeeOrder>): ShopeeOrder {
+function firstNumber(values: unknown[], fallback = 0) {
+  for (const value of values) {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return fallback;
+}
+
+function valueOf<T extends Record<string, unknown>>(value: T, key: string) {
+  return value[key];
+}
+
+function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): ShopeeOrder {
+  const quantity = Math.max(1, firstNumber([value.quantity, valueOf(value, "model_quantity_purchased"), valueOf(value, "item_quantity")], 1));
+  const price = firstNumber([value.price, valueOf(value, "total_amount"), valueOf(value, "order_amount"), valueOf(value, "escrow_amount")], 0);
+
   return {
     order_id: String(value.order_id ?? ""),
     product_id: String(value.product_id ?? ""),
     sku: String(value.sku ?? ""),
-    quantity: Number(value.quantity ?? 0),
-    price: Number(value.price ?? 0),
-    order_status: String(value.order_status ?? "unknown"),
+    quantity,
+    price,
+    order_status: String(value.order_status ?? valueOf(value, "status") ?? "unknown"),
     created_at: String(value.created_at ?? nowIso()),
   };
 }
 
-function normalizeProduct(value: Partial<ShopeeProduct>): ShopeeProduct {
+function normalizeProduct(value: Partial<ShopeeProduct> & Record<string, unknown>): ShopeeProduct {
   return {
     product_id: String(value.product_id ?? ""),
     title: String(value.title ?? ""),
-    price: Number(value.price ?? 0),
-    stock: Number(value.stock ?? 0),
-    sales_count: Number(value.sales_count ?? 0),
+    price: firstNumber([value.price, valueOf(value, "current_price"), valueOf(value, "original_price")], 0),
+    stock: firstNumber([value.stock, valueOf(value, "available_stock"), valueOf(value, "normal_stock"), valueOf(value, "current_stock")], 0),
+    sales_count: firstNumber([value.sales_count, valueOf(value, "sales"), valueOf(value, "historical_sold"), valueOf(value, "sold")], 0),
   };
 }
 
-function normalizeInventory(value: Partial<ShopeeInventoryItem>): ShopeeInventoryItem {
+function normalizeInventory(value: Partial<ShopeeInventoryItem> & Record<string, unknown>): ShopeeInventoryItem {
   return {
     product_id: String(value.product_id ?? ""),
-    available_stock: Number(value.available_stock ?? 0),
-    reserved_stock: Number(value.reserved_stock ?? 0),
+    available_stock: firstNumber([value.available_stock, valueOf(value, "stock"), valueOf(value, "normal_stock"), valueOf(value, "current_stock")], 0),
+    reserved_stock: firstNumber([value.reserved_stock, valueOf(value, "reserved"), valueOf(value, "reserved_stock_qty")], 0),
   };
 }
 
