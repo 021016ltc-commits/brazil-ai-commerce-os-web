@@ -5,6 +5,7 @@ import {
   shopeeOAuthCookieMaxAge,
   shopeeOAuthCookieName,
 } from "@/lib/connectors/shopeeOfficialClient";
+import { buildShopeeProxyAuthorizationUrl, shopeeProxyConfigured } from "@/lib/connectors/shopeeProxyClient";
 import { logApiError } from "@/lib/errorHandler";
 import { tenantIdFromRequest } from "@/lib/tenantContext";
 
@@ -17,7 +18,10 @@ export async function GET(request: NextRequest) {
   const state = createShopeeOAuthState();
 
   try {
-    const authorizationUrl = buildShopeeAuthorizationUrl(origin, state);
+    const redirectUrl = `${origin.replace(/\/$/, "")}/api/shopee/auth/callback`;
+    const authorizationUrl = shopeeProxyConfigured()
+      ? await buildShopeeProxyAuthorizationUrl({ redirect_url: redirectUrl, state })
+      : buildShopeeAuthorizationUrl(origin, state);
     const response = NextResponse.redirect(authorizationUrl);
 
     response.cookies.set(shopeeOAuthCookieName(), state, {

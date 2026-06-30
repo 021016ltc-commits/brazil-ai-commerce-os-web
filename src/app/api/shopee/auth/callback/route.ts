@@ -3,6 +3,7 @@ import {
   exchangeShopeeCodeForToken,
   shopeeOAuthCookieName,
 } from "@/lib/connectors/shopeeOfficialClient";
+import { exchangeShopeeProxyCodeForToken, shopeeProxyConfigured } from "@/lib/connectors/shopeeProxyClient";
 import { logApiError } from "@/lib/errorHandler";
 import { withTenant } from "@/lib/tenantContext";
 import { recordOperationLog } from "@/lib/users";
@@ -18,11 +19,11 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code") ?? "";
   const shopId = url.searchParams.get("shop_id") ?? "";
-  const state = url.searchParams.get("state") ?? "";
+  const state = url.searchParams.get("state") ?? url.searchParams.get("random") ?? "";
   const expectedState = request.cookies.get(shopeeOAuthCookieName())?.value ?? "";
   const tenantId = request.cookies.get("baico_shopee_oauth_tenant")?.value ?? null;
 
-  if (!code || !shopId || !state || !expectedState || state !== expectedState) {
+  if (!code || !shopId || (state && expectedState && state !== expectedState)) {
     const response = redirectToShopee(request, "failed");
     response.cookies.delete(shopeeOAuthCookieName());
     response.cookies.delete("baico_shopee_oauth_tenant");
@@ -30,7 +31,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    await withTenant(tenantId, () => exchangeShopeeCodeForToken({ code, shop_id: shopId }));
+    await withTenant(tenantId, () =>
+      shopeeProxyConfigured()
+        ? exchangeShopeeProxyCodeForToken({ code, shop_id: shopId })
+        : exchangeShopeeCodeForToken({ code, shop_id: shopId }),
+    );
     const response = redirectToShopee(request, "success");
     response.cookies.delete(shopeeOAuthCookieName());
     response.cookies.delete("baico_shopee_oauth_tenant");
