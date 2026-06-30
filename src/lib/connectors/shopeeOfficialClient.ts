@@ -360,6 +360,7 @@ async function fetchOfficialOrders(binding: ShopeeShopBinding): Promise<ShopeeOr
 
 async function fetchOfficialProducts(binding: ShopeeShopBinding): Promise<ShopeeProduct[]> {
   const listPayload = await officialGet("/api/v2/product/get_item_list", binding, {
+    offset: 0,
     page_size: 50,
     item_status: "NORMAL",
   });

@@ -81,16 +81,24 @@ function normalizeInventory(value: Partial<ShopeeInventoryItem>): ShopeeInventor
 }
 
 function extractArray<T>(payload: unknown, key: string): T[] {
+  const arrayKeys = [key, "data", "items", "item", "item_list", "order_list"];
+
   if (Array.isArray(payload)) return payload as T[];
-  if (payload && typeof payload === "object" && Array.isArray((payload as Record<string, unknown>)[key])) {
-    return (payload as Record<string, unknown>)[key] as T[];
+  if (!payload || typeof payload !== "object") return [];
+
+  const record = payload as Record<string, unknown>;
+  for (const arrayKey of arrayKeys) {
+    if (Array.isArray(record[arrayKey])) return record[arrayKey] as T[];
   }
-  if (payload && typeof payload === "object" && Array.isArray((payload as Record<string, unknown>).data)) {
-    return (payload as Record<string, unknown>).data as T[];
+
+  const response = record.response;
+  if (response && typeof response === "object") {
+    const responseRecord = response as Record<string, unknown>;
+    for (const arrayKey of arrayKeys) {
+      if (Array.isArray(responseRecord[arrayKey])) return responseRecord[arrayKey] as T[];
+    }
   }
-  if (payload && typeof payload === "object" && Array.isArray((payload as Record<string, unknown>).items)) {
-    return (payload as Record<string, unknown>).items as T[];
-  }
+
   return [];
 }
 
