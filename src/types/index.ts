@@ -988,6 +988,127 @@ export interface ShopeeInventoryItem {
   reserved_stock: number;
 }
 
+export interface ShopeeAdCampaign {
+  campaign_id: string;
+  campaign_name: string;
+  ad_type: string;
+  status: string;
+  daily_budget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  orders: number;
+  sales: number;
+  roas: number;
+  acos: number;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+export interface ShopeeAffiliatePerformance {
+  affiliate_id: string;
+  product_id: string;
+  product_name: string;
+  status: string;
+  commission_rate: number;
+  affiliate_orders: number;
+  affiliate_sales: number;
+  commission_cost: number;
+  roi: number;
+}
+
+export interface ShopeeListingDiagnostic {
+  issue_id: string;
+  product_id: string;
+  product_name: string;
+  issue_type: string;
+  severity: RiskLevel;
+  reason: string;
+  suggested_action: string;
+}
+
+export interface ShopeeShopWeightMetric {
+  metric_id: string;
+  metric_name: string;
+  weight_share: number;
+  score: number;
+  impact: string;
+  suggested_action: string;
+}
+
+export type ShopeeStrategyCategory =
+  | "listing"
+  | "advertising"
+  | "affiliate"
+  | "inventory"
+  | "campaign"
+  | "shop_weight"
+  | "automation_guard";
+
+export type ShopeeStrategyActionType =
+  | "observe"
+  | "optimize_listing"
+  | "increase_ad_budget"
+  | "decrease_ad_budget"
+  | "pause_ad_review"
+  | "review_affiliate"
+  | "join_campaign_review"
+  | "avoid_campaign"
+  | "replenish_review"
+  | "manual_review";
+
+export interface ShopeeStrategyRecommendation {
+  recommendation_id: string;
+  category: ShopeeStrategyCategory;
+  action_type: ShopeeStrategyActionType;
+  priority: "high" | "medium" | "low";
+  risk_level: RiskLevel;
+  target_id: string;
+  target_name: string;
+  title: string;
+  reason: string;
+  suggested_action: string;
+  expected_impact: string;
+  approval_required: boolean;
+  data_status: "ready" | "waiting_data" | "needs_permission";
+}
+
+export interface ShopeeStrategyFeedbackAlert {
+  alert_id: string;
+  alert_type: "missing_data" | "permission_required" | "data_quality" | "automation_guard";
+  severity: RiskLevel;
+  title: string;
+  message: string;
+  suggested_action: string;
+}
+
+export interface ShopeeStrategySummary {
+  product_count: number;
+  order_count: number;
+  ad_campaign_count: number;
+  affiliate_item_count: number;
+  listing_issue_count: number;
+  high_priority_count: number;
+  approval_required_count: number;
+  ready_recommendation_count: number;
+  waiting_data_count: number;
+}
+
+export interface ShopeeStrategyInsightsApiResponse {
+  source: ShopeeDataSource;
+  generated_at: string;
+  readonly: true;
+  summary: ShopeeStrategySummary;
+  recommendations: ShopeeStrategyRecommendation[];
+  listing_actions: ShopeeStrategyRecommendation[];
+  advertising_actions: ShopeeStrategyRecommendation[];
+  campaign_actions: ShopeeStrategyRecommendation[];
+  feedback_alerts: ShopeeStrategyFeedbackAlert[];
+  guardrails: string[];
+}
+
 export interface ShopeeReadOnlyApiResponse<T> {
   source: ShopeeDataSource;
   data: T[];
@@ -1003,6 +1124,22 @@ export interface ShopeeSyncResult {
   products_count: number;
   inventory_count: number;
   message: string;
+}
+
+export type ShopeeReadinessStepStatus = "ready" | "waiting" | "blocked";
+
+export interface ShopeeBindingReadiness {
+  go_live_status: "under_review" | "approved" | "not_started" | "unknown";
+  redirect_domain: string | null;
+  fixed_ip: string | null;
+  proxy_configured: boolean;
+  proxy_reachable: boolean;
+  proxy_url: string | null;
+  live_credentials_configured: boolean;
+  can_authorize: boolean;
+  can_sync: boolean;
+  blockers: string[];
+  checked_at: string;
 }
 
 export interface ShopeeShopBinding {
@@ -1052,6 +1189,7 @@ export interface ShopeeBindingPublicStatus {
   auth_url: string | null;
   message: string;
   shops: PlatformShopBindingPublicItem[];
+  readiness?: ShopeeBindingReadiness;
 }
 
 export interface DecisionFeedbackRecord {

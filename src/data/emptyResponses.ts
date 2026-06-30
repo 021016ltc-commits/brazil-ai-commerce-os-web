@@ -20,9 +20,13 @@ import type {
   RolesApiResponse,
   SelfOptimizationApiResponse,
   ShopeeInventoryItem,
+  ShopeeAdCampaign,
+  ShopeeAffiliatePerformance,
+  ShopeeListingDiagnostic,
   ShopeeOrder,
   ShopeeProduct,
   ShopeeReadOnlyApiResponse,
+  ShopeeShopWeightMetric,
   SystemHealthApiResponse,
   TasksApiResponse,
   TenantsApiResponse,
@@ -366,6 +370,34 @@ export const emptyShopeeProductsResponse: ShopeeReadOnlyApiResponse<ShopeeProduc
 };
 
 export const emptyShopeeInventoryResponse: ShopeeReadOnlyApiResponse<ShopeeInventoryItem> = {
+  source: "sqlite",
+  data: [],
+  synced_at: null,
+  readonly: true,
+};
+
+export const emptyShopeeAdsResponse: ShopeeReadOnlyApiResponse<ShopeeAdCampaign> = {
+  source: "sqlite",
+  data: [],
+  synced_at: null,
+  readonly: true,
+};
+
+export const emptyShopeeAffiliateResponse: ShopeeReadOnlyApiResponse<ShopeeAffiliatePerformance> = {
+  source: "sqlite",
+  data: [],
+  synced_at: null,
+  readonly: true,
+};
+
+export const emptyShopeeListingDiagnosticsResponse: ShopeeReadOnlyApiResponse<ShopeeListingDiagnostic> = {
+  source: "sqlite",
+  data: [],
+  synced_at: null,
+  readonly: true,
+};
+
+export const emptyShopeeShopWeightResponse: ShopeeReadOnlyApiResponse<ShopeeShopWeightMetric> = {
   source: "sqlite",
   data: [],
   synced_at: null,
