@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Ellipsis, EyeOff, Filter, RefreshCcw, Settings2 } from "lucide-react";
+import { Ellipsis } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { readStoredUser } from "@/lib/permissions";
@@ -70,8 +70,6 @@ export function CompactMetricCard({
 }
 
 export function MoreActionsMenu({
-  onRefresh,
-  showAdminItems = false,
   children,
 }: {
   onRefresh?: () => void;
@@ -82,8 +80,6 @@ export function MoreActionsMenu({
   const [currentUser, setCurrentUser] = useState<UserItem | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const role = userRole(currentUser);
-  const canExportOrFilter = role === "admin" || role === "manager";
-  const canSeeAdminItems = role === "admin" && showAdminItems;
 
   useEffect(() => {
     const syncUser = () => setCurrentUser(readStoredUser());
@@ -117,7 +113,7 @@ export function MoreActionsMenu({
     };
   }, [open]);
 
-  if (role === "operator" || role === "viewer") return null;
+  if (!children || role === "operator" || role === "viewer") return null;
 
   return (
     <div ref={menuRef} className="relative">
@@ -134,65 +130,6 @@ export function MoreActionsMenu({
       </Button>
       {open ? (
         <div role="menu" className="absolute right-0 top-10 z-40 w-44 rounded-lg border border-line bg-white p-1 shadow-lg">
-          {onRefresh ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                onRefresh();
-              }}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-              刷新
-            </button>
-          ) : null}
-          {canExportOrFilter ? (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  window.print();
-                }}
-                className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                导出
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => setOpen(false)}
-                className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                <Filter className="h-4 w-4" aria-hidden="true" />
-                筛选
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => setOpen(false)}
-                className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-              >
-                <Settings2 className="h-4 w-4" aria-hidden="true" />
-                列设置
-              </button>
-            </>
-          ) : null}
-          {canSeeAdminItems ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              <EyeOff className="h-4 w-4" aria-hidden="true" />
-              高级设置
-            </button>
-          ) : null}
           {children}
         </div>
       ) : null}
@@ -204,11 +141,11 @@ export function ColumnSettingsNote({ hiddenFields }: { hiddenFields: string[] })
   return (
     <details className="compact-details rounded-lg border border-line bg-white shadow-panel">
       <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ink">
-        列设置
+        低频字段已收纳
         <span className="text-xs font-medium text-slate-500">已隐藏 {hiddenFields.length} 个低频字段</span>
       </summary>
       <div className="border-t border-line p-3 text-sm leading-6 text-slate-600">
-        默认隐藏：{hiddenFields.join("、")}。这些字段保留在数据中，后续可接入列设置面板打开。
+        默认隐藏：{hiddenFields.join("、")}。这些字段仍保留在系统数据中，当前页面只展示运营优先字段。
       </div>
     </details>
   );

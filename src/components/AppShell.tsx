@@ -398,6 +398,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <QuickActions />
               <div className="hidden sm:block">
                 <LanguageSwitcher compact />
               </div>
@@ -455,7 +456,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   当前角色没有“{currentPageTitle}”权限。演示环境保留页面可见，但管理操作会被限制。
                 </div>
               ) : null}
-              <QuickActions />
               {children}
             </div>
           </div>

@@ -14,7 +14,7 @@ import {
   ShoppingBag,
   Store,
 } from "lucide-react";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import {
   emptyShopeeInventoryResponse,
   emptyShopeeOrdersResponse,
@@ -443,20 +443,18 @@ export default function ShopeePage() {
               <KeyRound className="h-4 w-4" aria-hidden="true" />
               授权当前平台店铺
             </button>
-            <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems>
-              {isAdmin ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleSync}
-                  disabled={isSyncing || authorizedShopCount === 0}
-                  className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} aria-hidden="true" />
-                  {isSyncing ? "同步中" : "同步已授权店铺"}
-                </button>
-              ) : null}
-            </MoreActionsMenu>
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={isSyncing || authorizedShopCount === 0}
+                title={authorizedShopCount === 0 ? "完成店铺授权后可同步真实数据" : "读取已授权店铺的订单、商品和库存"}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} aria-hidden="true" />
+                {isSyncing ? "同步中" : "同步已授权店铺"}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
