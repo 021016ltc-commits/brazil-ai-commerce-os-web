@@ -249,12 +249,14 @@ export default function ShopeePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    const shopId = params.get("shop_id");
-    if (!code || !shopId) return;
+    if (!code) return;
 
     const callbackUrl = new URL("/api/shopee/auth/callback", window.location.origin);
     callbackUrl.searchParams.set("code", code);
-    callbackUrl.searchParams.set("shop_id", shopId);
+    ["shop_id", "shop_id_list", "shop_ids", "main_account_id", "merchant_id"].forEach((key) => {
+      const value = params.get(key);
+      if (value) callbackUrl.searchParams.set(key, value);
+    });
     const state = params.get("state") ?? params.get("random");
     if (state) callbackUrl.searchParams.set("state", state);
     window.location.replace(callbackUrl.toString());
