@@ -19,7 +19,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import {
   emptyDailyOpsResponse,
   emptyDashboardResponse,
@@ -399,7 +399,6 @@ export default function CommandCenterPage() {
                 处理今天最重要的运营事项。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

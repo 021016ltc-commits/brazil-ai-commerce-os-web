@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { DecisionFeedbackExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import {
   emptyDecisionHistoryResponse,
@@ -233,7 +233,6 @@ export default function DecisionFeedbackPage() {
               </p>
             </div>
           </div>
-          <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems />
         </div>
       </section>
 

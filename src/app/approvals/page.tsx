@@ -2,7 +2,7 @@
 
 import { Check, Clock3, Filter, History, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyApprovalsResponse } from "@/data/emptyResponses";
 import { buildApprovalHistoryItem, buildApprovalStats, approvalPriorityRank } from "@/lib/approvals";
@@ -236,7 +236,6 @@ export default function ApprovalsPage() {
                 处理需要人工确认的建议。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => void refreshApprovals().catch(() => undefined)} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">

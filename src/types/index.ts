@@ -16,7 +16,7 @@ export type MetricTone = "neutral" | "good" | "warn" | "risk";
 
 export type DashboardValueUnit = "currency" | "percent" | "days" | "count" | "ratio";
 
-export type ApiDataSource = "sqlite" | "mock";
+export type ApiDataSource = "sqlite" | "mock" | "shopee_api";
 
 export type ShopeeDataSource = "shopee_api" | "sqlite" | "mock";
 

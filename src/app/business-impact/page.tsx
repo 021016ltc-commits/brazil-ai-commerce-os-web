@@ -12,7 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { BusinessImpactExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import { emptyBusinessImpactResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { actionTypeLabelZh, statusLabel } from "@/locales/zh-CN";
@@ -170,7 +170,6 @@ export default function BusinessImpactPage() {
                 查看决策和动作的经营影响。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { ProfitExperienceCharts } from "@/components/ProfitExperienceCharts";
-import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyProfitResponse } from "@/data/emptyResponses";
 import { formatBrl, formatPercent } from "@/lib/format";
@@ -137,7 +137,6 @@ export default function ProfitPage() {
                 查看利润、成本和异常商品。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">

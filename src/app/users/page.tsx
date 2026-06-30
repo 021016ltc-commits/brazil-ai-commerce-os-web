@@ -21,6 +21,7 @@ import {
 } from "@/lib/permissions";
 import { logActionLabel, statusLabel } from "@/locales/zh-CN";
 import type {
+  ApiDataSource,
   OperationLogsApiResponse,
   PermissionItem,
   RoleItem,
@@ -35,7 +36,8 @@ const fallbackLogs: OperationLogsApiResponse = emptyOperationLogsResponse;
 
 const roleOptions: UserRoleName[] = ["admin", "operator", "buyer", "finance", "viewer"];
 
-function sourceLabel(source: "sqlite" | "mock") {
+function sourceLabel(source: ApiDataSource) {
+  if (source === "shopee_api") return "Shopee真实数据";
   return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 

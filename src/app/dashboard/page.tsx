@@ -18,7 +18,7 @@ import {
   LineChartCard,
   type ChartPoint,
 } from "@/components/Charts";
-import { ColumnSettingsNote, CompactMetricCard, MoreActionsMenu } from "@/components/OperatorControls";
+import { ColumnSettingsNote, CompactMetricCard } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -164,7 +164,6 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold text-ink">运营总览</h1>
           <p className="mt-1 text-sm text-slate-500">查看今日利润、库存风险和待处理事项。</p>
         </div>
-        <MoreActionsMenu onRefresh={() => window.location.reload()} />
       </div>
 
       {loadError ? (

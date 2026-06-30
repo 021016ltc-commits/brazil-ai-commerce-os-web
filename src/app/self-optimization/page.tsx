@@ -12,7 +12,7 @@ import {
   Target,
 } from "lucide-react";
 import { SelfOptimizationExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import { emptySelfOptimizationResponse } from "@/data/emptyResponses";
 import { formatCount, formatPercent } from "@/lib/format";
 import type {
@@ -155,7 +155,6 @@ export default function SelfOptimizationPage() {
                 查看规则表现和优化建议。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} showAdminItems />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

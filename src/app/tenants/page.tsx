@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Building2, Database, Layers3, Plus, ShieldCheck, Users } from "lucide-react";
 import { emptyTenantsResponse } from "@/data/emptyResponses";
-import type { PlanType, TenantItem, TenantsApiResponse, WorkspaceItem } from "@/types";
+import type { ApiDataSource, PlanType, TenantItem, TenantsApiResponse, WorkspaceItem } from "@/types";
 
 const fallbackData: TenantsApiResponse = emptyTenantsResponse;
 
@@ -13,7 +13,8 @@ const planLabels: Record<PlanType, string> = {
   enterprise: "Enterprise",
 };
 
-function sourceLabel(source: "sqlite" | "mock") {
+function sourceLabel(source: ApiDataSource) {
+  if (source === "shopee_api") return "Shopee真实数据";
   return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 

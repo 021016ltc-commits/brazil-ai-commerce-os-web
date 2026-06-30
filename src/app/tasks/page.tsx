@@ -16,7 +16,7 @@ import {
   ShieldAlert,
   Target,
 } from "lucide-react";
-import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyTasksResponse } from "@/data/emptyResponses";
 import type {
@@ -368,7 +368,6 @@ export default function TasksPage() {
                 按优先级处理今天最重要的运营事项。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

@@ -222,7 +222,12 @@ function buildProducts(agg: ProductAgg[], generatedAt: string): Product[] {
   }));
 }
 
-function buildProfit(agg: ProductAgg[], inventorySnapshot: InventorySnapshot, generatedAt: string): ProfitApiResponse {
+function buildProfit(
+  agg: ProductAgg[],
+  inventorySnapshot: InventorySnapshot,
+  generatedAt: string,
+  source: ShopeeDataSource,
+): ProfitApiResponse {
   const totalRevenue = agg.reduce((sum, item) => sum + item.revenue, 0);
   const productProfit: ProductProfitItem[] = agg.slice(0, 50).map((item) => ({
     profit_item_id: `profit_real_${item.productId}`,
@@ -255,7 +260,7 @@ function buildProfit(agg: ProductAgg[], inventorySnapshot: InventorySnapshot, ge
   };
 
   return {
-    source: "sqlite",
+    source,
     snapshot,
     cost_structure: buildCostStructure(snapshot),
     profit_risk: buildProfitRisk(productProfit),
@@ -263,7 +268,7 @@ function buildProfit(agg: ProductAgg[], inventorySnapshot: InventorySnapshot, ge
   };
 }
 
-function buildInventory(agg: ProductAgg[], generatedAt: string): InventoryApiResponse {
+function buildInventory(agg: ProductAgg[], generatedAt: string, source: ShopeeDataSource): InventoryApiResponse {
   const hasStockSignal = agg.some((item) => item.stock > 0);
   const inventoryStock: InventoryStockItem[] = agg.slice(0, 100).map((item) => {
     const dailySalesAvg = item.quantity / 14;
@@ -348,7 +353,7 @@ function buildInventory(agg: ProductAgg[], generatedAt: string): InventoryApiRes
   const healthScore = !hasStockSignal && agg.length > 0 ? 40 : clamp(100 - stockoutCount * 8 - overstockCount * 4, 0, 100);
 
   return {
-    source: "sqlite",
+    source,
     snapshot: {
       inventory_snapshot_id: `inventory_real_shopee_${generatedAt.slice(0, 10)}`,
       reporting_date: generatedAt.slice(0, 10),
@@ -370,6 +375,7 @@ function buildOpportunities(
   products: Product[],
   agg: ProductAgg[],
   inventory: InventoryApiResponse,
+  source: ShopeeDataSource,
 ): OpportunitiesApiResponse {
   const keywords: Keyword[] = [
     {
@@ -464,7 +470,7 @@ function buildOpportunities(
   }));
 
   return {
-    source: "sqlite",
+    source,
     products,
     keywords,
     market_score: marketScore,
@@ -478,6 +484,7 @@ function buildOpportunities(
 function buildAnalysis(
   opportunities: OpportunitiesApiResponse,
   inventory: InventoryApiResponse,
+  source: ShopeeDataSource,
 ): AnalysisApiResponse {
   const opportunityAnalysis: OpportunityAnalysisItem[] = opportunities.today_opportunities.slice(0, 20).map((item) => ({
     analysis_id: `analysis_real_${item.product_uid}`,
@@ -511,7 +518,7 @@ function buildAnalysis(
   }));
 
   return {
-    source: "sqlite",
+    source,
     opportunity_analysis: opportunityAnalysis,
     risk_analysis: riskAnalysis,
     market_analysis: [
@@ -539,6 +546,7 @@ function buildTasks(
   inventory: InventoryApiResponse,
   opportunities: OpportunitiesApiResponse,
   analysis: AnalysisApiResponse,
+  source: ShopeeDataSource,
 ): TasksApiResponse {
   const tasks: TodayTaskItem[] = [];
 
@@ -628,7 +636,7 @@ function buildTasks(
   const estimatedInventoryImpact = uniqueTasks.reduce((sum, task) => sum + task.estimated_inventory_impact, 0);
 
   return {
-    source: "sqlite",
+    source,
     overview: {
       total_tasks: uniqueTasks.length,
       high_priority_tasks: highTasks.length,
@@ -798,7 +806,7 @@ function buildDashboard(
       })),
     },
     system_status: {
-      data_source: source === "mock" ? "mock" : "sqlite",
+      data_source: source,
       last_updated_at: generatedAt,
       api_status: "healthy",
       database_status: "connected",
@@ -832,7 +840,7 @@ function buildDashboard(
   ];
 
   return {
-    source: source === "mock" ? "mock" : "sqlite",
+    source,
     products,
     action_queue: [],
     crawl_logs: crawlLogs,
@@ -846,6 +854,7 @@ function buildDailyOps(
   inventory: InventoryApiResponse,
   opportunities: OpportunitiesApiResponse,
   generatedAt: string,
+  source: ShopeeDataSource,
 ): DailyOpsApiResponse {
   const coreGoals = tasks.top_tasks.slice(0, 3).map((task) => ({
     goal_id: `daily_${task.task_id}`,
@@ -860,7 +869,7 @@ function buildDailyOps(
   }));
 
   return {
-    source: "sqlite",
+    source,
     generated_at: generatedAt,
     core_goals: coreGoals,
     risk_overview: {
@@ -939,13 +948,13 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
 
   const productAgg = aggregateProducts(orders, productsRaw, inventoryRaw);
   const products = buildProducts(productAgg, generatedAt);
-  const inventory = buildInventory(productAgg, generatedAt);
-  const profit = buildProfit(productAgg, inventory.snapshot, generatedAt);
-  const opportunities = buildOpportunities(products, productAgg, inventory);
-  const analysis = buildAnalysis(opportunities, inventory);
-  const tasks = buildTasks(productAgg, inventory, opportunities, analysis);
+  const inventory = buildInventory(productAgg, generatedAt, source);
+  const profit = buildProfit(productAgg, inventory.snapshot, generatedAt, source);
+  const opportunities = buildOpportunities(products, productAgg, inventory, source);
+  const analysis = buildAnalysis(opportunities, inventory, source);
+  const tasks = buildTasks(productAgg, inventory, opportunities, analysis, source);
   const dashboard = buildDashboard(products, productAgg, profit, inventory, opportunities, analysis, tasks, generatedAt, source);
-  const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt);
+  const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt, source);
 
   return {
     source,
@@ -983,7 +992,7 @@ export async function getRealShopeeProductsResponse() {
   const bundle = await getRealShopeeBusinessBundle();
   if (!bundle) return null;
   return {
-    source: bundle.source === "mock" ? "mock" : "sqlite",
+    source: bundle.source,
     products: bundle.products,
   };
 }

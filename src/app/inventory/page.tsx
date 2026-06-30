@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { InventoryExperienceCharts } from "@/components/InventoryExperienceCharts";
-import { ColumnSettingsNote, MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyInventoryResponse } from "@/data/emptyResponses";
 import { formatBrl } from "@/lib/format";
@@ -258,7 +258,6 @@ export default function InventoryPage() {
                 查看库存健康、缺货风险和补货建议。
               </p>
             </div>
-            <MoreActionsMenu onRefresh={() => window.location.reload()} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">

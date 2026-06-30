@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { MetricCard } from "@/components/MetricCard";
 import { ActionsExperienceCharts } from "@/components/ModuleExperienceCharts";
-import { MoreActionsMenu, dataStatusLabel } from "@/components/OperatorControls";
+import { dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyActionHistoryResponse, emptyActionQueueResponse } from "@/data/emptyResponses";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
@@ -232,7 +232,6 @@ export default function ActionsPage() {
               </p>
             </div>
           </div>
-          <MoreActionsMenu onRefresh={() => void refreshData().catch(() => undefined)} showAdminItems />
         </div>
       </section>
 

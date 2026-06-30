@@ -29,6 +29,7 @@ type SortKey = "opportunity_score" | "risk_level" | "demand_score" | "priority";
 const fallbackAnalysis: AnalysisApiResponse = emptyAnalysisResponse;
 
 function sourceLabel(source: AnalysisApiResponse["source"]) {
+  if (source === "shopee_api") return "Shopee真实数据";
   return source === "sqlite" ? "真实数据" : "测试数据已禁用";
 }
 
