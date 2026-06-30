@@ -141,9 +141,9 @@ export default function ProfitPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs text-slate-500">总利润</div>
-              <div className="mt-2 text-2xl font-semibold text-forest">{formatBrl(snapshot.month_net_profit)}</div>
-              <div className="mt-1 text-xs text-slate-500">昨日 {formatBrl(snapshot.yesterday_net_profit)}</div>
+              <div className="text-xs text-slate-500">订单金额</div>
+              <div className="mt-2 text-2xl font-semibold text-forest">{formatBrl(snapshot.cash_flow)}</div>
+              <div className="mt-1 text-xs text-slate-500">来自已授权店铺订单</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
               <div className="text-xs text-slate-500">利润率</div>

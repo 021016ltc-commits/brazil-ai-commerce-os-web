@@ -98,11 +98,18 @@ export default function DashboardPage() {
   const topRisks = summary.opportunity_and_risk.top_risks.slice(0, 5);
   const topOpportunities = summary.opportunity_and_risk.top_opportunities.slice(0, 4);
   const recommendedActions = summary.opportunity_and_risk.recommended_actions.slice(0, 4);
-  const todayGmv = Math.max(taskData.impact_stats.total_gmv_impact, summary.business_impact.total_profit_impact * 3);
+  const todayGmv = Math.max(
+    summary.core_metrics.cash_flow,
+    summary.profit_and_cash.cash_flow,
+    taskData.impact_stats.total_gmv_impact,
+    summary.business_impact.total_profit_impact * 3,
+  );
   const lastUpdated = summary.system_status.last_updated_at || "刚刚";
   const hasOperatingData =
     dashboardData.products.length > 0 ||
     taskData.overview.total_tasks > 0 ||
+    summary.core_metrics.cash_flow !== 0 ||
+    summary.profit_and_cash.cash_flow !== 0 ||
     summary.profit_and_cash.yesterday_net_profit !== 0 ||
     summary.profit_and_cash.month_net_profit !== 0 ||
     summary.inventory_risk.stock_health_score > 0 ||

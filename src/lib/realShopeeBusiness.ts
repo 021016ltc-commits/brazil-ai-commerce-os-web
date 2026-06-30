@@ -866,6 +866,7 @@ function buildDailyOps(
   opportunities: OpportunitiesApiResponse,
   generatedAt: string,
   source: ShopeeDataSource,
+  fallbackGmv = 0,
 ): DailyOpsApiResponse {
   const coreGoals = tasks.top_tasks.slice(0, 3).map((task) => ({
     goal_id: `daily_${task.task_id}`,
@@ -917,7 +918,7 @@ function buildDailyOps(
       queue_items: [],
     },
     metrics: {
-      expected_gmv: tasks.impact_stats.total_gmv_impact,
+      expected_gmv: Math.max(tasks.impact_stats.total_gmv_impact, fallbackGmv),
       expected_profit: tasks.impact_stats.total_profit_impact,
       stock_health_score: inventory.snapshot.stock_health_score,
       decision_success_rate: 0,
@@ -966,7 +967,7 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
   const analysis = buildAnalysis(opportunities, inventory, source);
   const tasks = buildTasks(productAgg, inventory, opportunities, analysis, source);
   const dashboard = buildDashboard(products, productAgg, profit, inventory, opportunities, analysis, tasks, generatedAt, source, orderRevenue);
-  const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt, source);
+  const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt, source, orderRevenue);
 
   return {
     source,
