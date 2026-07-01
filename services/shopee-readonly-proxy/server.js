@@ -19,7 +19,7 @@ const ORDER_HISTORY_DAYS = Math.max(
 );
 const MAX_SYNC_ITEMS = Math.max(50, Math.min(50000, Number(process.env.SHOPEE_FULL_SYNC_MAX_ITEMS || process.env.SHOPEE_MAX_SYNC_ITEMS || 10000)));
 const PAGE_SIZE = Math.max(10, Math.min(100, Number(process.env.SHOPEE_PAGE_SIZE || 50)));
-const SERVICE_VERSION = "2026-07-01.full-pagination-v2";
+const SERVICE_VERSION = "2026-07-01.full-pagination-token-refresh-v3";
 
 function nowIso() {
   return new Date().toISOString();
@@ -260,7 +260,9 @@ function chunk(items, size) {
 
 async function ensureFreshBinding(binding) {
   if (!binding || !binding.access_token) return binding;
-  const expiresAt = Number(binding.expire_at || binding.token_expire_at || 0);
+  const expiresAt = binding.expire_at
+    ? Number(binding.expire_at)
+    : Math.floor(Date.parse(binding.token_expire_at || "") / 1000);
   if (!binding.refresh_token || !expiresAt || expiresAt - nowSeconds() > 600) return binding;
 
   const payload = await shopeePost("/api/v2/auth/access_token/get", {
