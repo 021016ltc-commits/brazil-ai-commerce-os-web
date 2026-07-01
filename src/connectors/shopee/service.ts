@@ -569,8 +569,20 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
   if (shopeeApiConfigured()) {
     try {
       const orders = await fetchRemoteOrders();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
-      return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
+      if (orders.length > 0) {
+        const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
+        return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
+      }
+    } catch {
+      // Try the full proxy sync payload before falling back to cache.
+    }
+
+    try {
+      const bundle = await fetchRemoteShopeeBundle();
+      if (bundle.orders.length > 0) {
+        const syncedAt = await writeShopeeCacheBestEffort(bundle);
+        return { source: "shopee_api", data: bundle.orders, synced_at: syncedAt, readonly: true };
+      }
     } catch {
       // Fall through to direct API fallback, then SQLite cache.
     }
