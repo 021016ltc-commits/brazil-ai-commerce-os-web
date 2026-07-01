@@ -155,8 +155,8 @@ function remotePageSize(maxItems: number) {
 }
 
 function remoteFetchTimeoutMs() {
-  const configured = Number(process.env.SHOPEE_READ_TIMEOUT_MS ?? 12_000);
-  return Math.max(3000, Math.min(25_000, Number.isFinite(configured) ? configured : 12_000));
+  const configured = Number(process.env.SHOPEE_READ_TIMEOUT_MS ?? 22_000);
+  return Math.max(3000, Math.min(25_000, Number.isFinite(configured) ? configured : 22_000));
 }
 
 function readPaginationInfo(payload: unknown, currentOffset: number, pageSize: number): RemotePageInfo {

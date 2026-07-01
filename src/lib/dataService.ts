@@ -70,6 +70,11 @@ import {
   getShopeeSyncStatus as getShopeeSyncStatusFromEngine,
 } from "@/lib/connectors/shopeeSyncEngine";
 import {
+  getInventory as getShopeeInventoryRealtime,
+  getOrders as getShopeeOrdersRealtime,
+  getProducts as getShopeeProductsRealtime,
+} from "@/lib/connectors/shopee";
+import {
   getRealShopeeAnalysisResponse,
   getRealShopeeDashboardResponse,
   getRealShopeeDailyOpsResponse,
@@ -252,15 +257,15 @@ export const dataService = {
   },
 
   getShopeeOrders() {
-    return getShopeeSnapshotResource("orders");
+    return withApiCache(cacheKey("shopee-orders"), shortTtlMs, getShopeeOrdersRealtime);
   },
 
   getShopeeProducts() {
-    return getShopeeSnapshotResource("products");
+    return withApiCache(cacheKey("shopee-products"), shortTtlMs, getShopeeProductsRealtime);
   },
 
   getShopeeInventory() {
-    return getShopeeSnapshotResource("inventory");
+    return withApiCache(cacheKey("shopee-inventory"), shortTtlMs, getShopeeInventoryRealtime);
   },
 
   async syncShopeeData() {
