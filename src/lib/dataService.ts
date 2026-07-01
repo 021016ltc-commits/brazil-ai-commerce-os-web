@@ -64,7 +64,6 @@ import {
 } from "@/lib/execution/virtualExecutionEngine";
 import {
   clearShopeeSnapshotMemory,
-  createShopeeSnapshotBundle,
   getLatestShopeeSnapshot,
   getShopeeConsistencyReport as getShopeeConsistencyReportFromEngine,
   getShopeeSyncStatus as getShopeeSyncStatusFromEngine,
@@ -73,6 +72,7 @@ import {
   getInventory as getShopeeInventoryRealtime,
   getOrders as getShopeeOrdersRealtime,
   getProducts as getShopeeProductsRealtime,
+  syncData as syncShopeeReadOnlyData,
 } from "@/lib/connectors/shopee";
 import {
   getRealShopeeAnalysisResponse,
@@ -270,17 +270,20 @@ export const dataService = {
 
   async syncShopeeData() {
     clearShopeeSnapshotMemory();
-    const snapshot = await createShopeeSnapshotBundle();
+    const result = await syncShopeeReadOnlyData();
     clearBusinessCaches();
     return {
-      source: snapshot.source,
-      timestamp: snapshot.created_at,
-      synced_at: snapshot.created_at,
+      source: result.source,
+      timestamp: result.synced_at,
+      synced_at: result.synced_at,
       readonly: true,
-      orders_count: snapshot.orders.data.length,
-      products_count: snapshot.products.data.length,
-      inventory_count: snapshot.inventory.data.length,
-      message: "已同步授权店铺真实数据快照。",
+      orders_count: result.orders_count,
+      products_count: result.products_count,
+      inventory_count: result.inventory_count,
+      message:
+        result.source === "shopee_api"
+          ? "已同步授权店铺真实数据快照。"
+          : "已完成店铺数据同步检查。",
     };
   },
 

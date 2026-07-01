@@ -160,8 +160,8 @@ function remotePageSize(maxItems: number) {
 }
 
 function remoteFetchTimeoutMs() {
-  const configured = Number(process.env.SHOPEE_READ_TIMEOUT_MS ?? 18_000);
-  return Math.max(3000, Math.min(20_000, Number.isFinite(configured) ? configured : 18_000));
+  const configured = Number(process.env.SHOPEE_READ_TIMEOUT_MS ?? 25_000);
+  return Math.max(3000, Math.min(55_000, Number.isFinite(configured) ? configured : 25_000));
 }
 
 function readPaginationInfo(payload: unknown, currentOffset: number, pageSize: number): RemotePageInfo {
@@ -328,7 +328,6 @@ async function fetchRemoteEndpoint<T>(
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
   const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
     maxItems: remoteOrderFastReadItems(),
-    refresh: true,
   });
   return orders.map(normalizeOrder).filter((item) => item.order_id);
 }
@@ -362,6 +361,8 @@ async function fetchRemoteShopeeBundle(): Promise<RemoteShopeePayload> {
   const maxItems = remoteMaxSyncItems();
   const pageSize = remotePageSize(maxItems);
   const payload = await fetchRemoteJson("sync", {
+    start: 1,
+    refresh: 1,
     all: 1,
     full: 1,
     limit: maxItems,
@@ -674,19 +675,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
     inventory: [],
   };
 
-  if (!shouldUseMockData()) {
-    try {
-      const official = await fetchOfficialShopeeReadOnlyData();
-      if (official) {
-        payload = official;
-        source = "shopee_api";
-      }
-    } catch {
-      source = isMockDataAllowed() ? "mock" : "sqlite";
-    }
-  }
-
-  if (!shouldUseMockData() && source !== "shopee_api" && shopeeApiConfigured()) {
+  if (!shouldUseMockData() && shopeeApiConfigured()) {
     try {
       payload = await fetchRemoteShopeeDataPartial();
       source =
@@ -711,6 +700,18 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
           inventory: shopeeInventoryMock,
         };
       }
+    }
+  }
+
+  if (!shouldUseMockData() && source !== "shopee_api") {
+    try {
+      const official = await fetchOfficialShopeeReadOnlyData();
+      if (official) {
+        payload = official;
+        source = "shopee_api";
+      }
+    } catch {
+      source = isMockDataAllowed() ? "mock" : "sqlite";
     }
   }
 
