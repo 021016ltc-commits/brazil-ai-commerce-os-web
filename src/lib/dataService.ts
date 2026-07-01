@@ -281,9 +281,10 @@ export const dataService = {
       products_count: result.products_count,
       inventory_count: result.inventory_count,
       message:
-        result.source === "shopee_api"
+        result.message ||
+        (result.source === "shopee_api"
           ? "已同步授权店铺真实数据快照。"
-          : "已完成店铺数据同步检查。",
+          : "已完成店铺数据同步检查。"),
     };
   },
 
@@ -546,3 +547,4 @@ export const dataService = {
     return createWorkspace(params);
   },
 };
+

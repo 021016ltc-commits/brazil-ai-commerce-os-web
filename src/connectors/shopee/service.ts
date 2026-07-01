@@ -84,6 +84,10 @@ function cleanText(value: unknown) {
   return text;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : "Unknown error";
+}
+
 function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): ShopeeOrder {
   const quantity = Math.max(1, firstNumber([value.quantity, valueOf(value, "model_quantity_purchased"), valueOf(value, "item_quantity")], 1));
   const price = firstNumber([value.price, valueOf(value, "total_amount"), valueOf(value, "order_amount"), valueOf(value, "escrow_amount")], 0);
@@ -262,7 +266,9 @@ async function fetchRemoteJson(
   }
 
   if (!response.ok) {
-    throw new Error(`Shopee read-only endpoint ${path} returned ${response.status}.`);
+    const detail = await response.text().catch(() => "");
+    const suffix = detail ? ` ${detail.slice(0, 240)}` : "";
+    throw new Error(`Shopee read-only endpoint ${path} returned ${response.status}.${suffix}`);
   }
 
   return response.json();
@@ -381,6 +387,36 @@ async function fetchRemoteShopeeBundle(): Promise<RemoteShopeePayload> {
   return { orders, products, inventory };
 }
 
+function parseRemoteSyncStatus(payload: unknown): {
+  synced_at: string;
+  orders_count: number;
+  products_count: number;
+  inventory_count: number;
+  message: string;
+} {
+  const record = asRecord(payload);
+  const snapshots = asRecord(record.snapshots);
+  const syncState = asRecord(record.sync_state);
+  const syncedAt =
+    cleanText(syncState.completed_at ?? syncState.started_at ?? record.synced_at ?? record.timestamp) || nowIso();
+  const status = cleanText(syncState.status ?? record.status ?? "");
+  const message =
+    cleanText(syncState.message ?? record.message) ||
+    (status ? `Shopee read-only sync status: ${status}.` : "Shopee read-only sync status received.");
+
+  return {
+    synced_at: syncedAt,
+    orders_count: firstNumber([snapshots.orders_count, record.orders_count], 0),
+    products_count: firstNumber([snapshots.products_count, record.products_count], 0),
+    inventory_count: firstNumber([snapshots.inventory_count, record.inventory_count], 0),
+    message,
+  };
+}
+
+async function fetchRemoteSyncStatus() {
+  return parseRemoteSyncStatus(await fetchRemoteJson("sync/status", {}, { timeoutMs: 8000 }));
+}
+
 async function startRemoteShopeeSync(): Promise<{
   synced_at: string;
   orders_count: number;
@@ -388,22 +424,19 @@ async function startRemoteShopeeSync(): Promise<{
   inventory_count: number;
   message: string;
 }> {
-  const payload = await fetchRemoteJson("sync/start", {}, { timeoutMs: 8000 });
-  const record = asRecord(payload);
-  const snapshots = asRecord(record.snapshots);
-  const syncState = asRecord(record.sync_state);
-  const syncedAt =
-    cleanText(syncState.completed_at ?? syncState.started_at ?? record.synced_at ?? record.timestamp) || nowIso();
+  const started = parseRemoteSyncStatus(await fetchRemoteJson("sync/start", {}, { timeoutMs: 8000 }));
+  if (started.orders_count > 0 || started.products_count > 0 || started.inventory_count > 0) return started;
 
-  return {
-    synced_at: syncedAt,
-    orders_count: firstNumber([snapshots.orders_count, record.orders_count], 0),
-    products_count: firstNumber([snapshots.products_count, record.products_count], 0),
-    inventory_count: firstNumber([snapshots.inventory_count, record.inventory_count], 0),
-    message:
-      cleanText(syncState.message ?? record.message) ||
-      "Shopee read-only background sync has started. Refresh the page after it completes.",
-  };
+  try {
+    const status = await fetchRemoteSyncStatus();
+    if (status.orders_count > 0 || status.products_count > 0 || status.inventory_count > 0) return status;
+    return {
+      ...started,
+      message: status.message || started.message,
+    };
+  } catch {
+    return started;
+  }
 }
 
 async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
@@ -597,7 +630,13 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
 
   if (shopeeApiConfigured()) {
     try {
-      const orders = await fetchRemoteOrders();
+      let orders = await fetchRemoteOrders();
+      if (orders.length === 0) {
+        const status = await fetchRemoteSyncStatus().catch(() => null);
+        if ((status?.orders_count ?? 0) > 0) {
+          orders = await fetchRemoteOrders();
+        }
+      }
       if (orders.length > 0) {
         const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
         return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
@@ -718,7 +757,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         inventory_count: startResult.inventory_count,
         message: startResult.message,
       };
-    } catch {
+    } catch (error) {
       return {
         source: "sqlite",
         readonly: true,
@@ -726,7 +765,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         orders_count: 0,
         products_count: 0,
         inventory_count: 0,
-        message: "Shopee background sync did not confirm quickly. Existing data remains available.",
+        message: `Shopee background sync did not confirm quickly: ${errorMessage(error)}. Existing data remains available.`,
       };
     }
   }
