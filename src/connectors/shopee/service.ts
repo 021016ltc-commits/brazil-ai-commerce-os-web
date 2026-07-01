@@ -338,12 +338,15 @@ async function fetchRemoteEndpoint<T>(
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
   try {
     const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 8_000 });
-    return extractArray<Partial<ShopeeOrder>>(payload, "orders")
+    const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders")
       .map(normalizeOrder)
       .filter((item) => item.order_id);
+    if (orders.length > 0) return orders;
   } catch {
-    return fetchRemoteOrdersQuick().catch(() => []);
+    // The proxy can return an empty snapshot while a full read is still running.
   }
+
+  return fetchRemoteOrdersQuick().catch(() => []);
 }
 
 async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
@@ -400,6 +403,13 @@ async function fetchRemoteProducts(): Promise<ShopeeProduct[]> {
   return products.map(normalizeProduct).filter((item) => item.product_id);
 }
 
+async function fetchRemoteProductsQuick(): Promise<ShopeeProduct[]> {
+  const payload = await fetchRemoteJson("products", {}, { timeoutMs: 8_000 });
+  return extractArray<Partial<ShopeeProduct>>(payload, "products")
+    .map(normalizeProduct)
+    .filter((item) => item.product_id);
+}
+
 async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
   try {
     const payload = await fetchRemoteJson("inventory", {}, { timeoutMs: 12_000 });
@@ -413,6 +423,13 @@ async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
 
   const inventory = await fetchRemoteEndpoint<Partial<ShopeeInventoryItem>>("inventory", "inventory", "product_id");
   return inventory.map(normalizeInventory).filter((item) => item.product_id);
+}
+
+async function fetchRemoteInventoryQuick(): Promise<ShopeeInventoryItem[]> {
+  const payload = await fetchRemoteJson("inventory", {}, { timeoutMs: 8_000 });
+  return extractArray<Partial<ShopeeInventoryItem>>(payload, "inventory")
+    .map(normalizeInventory)
+    .filter((item) => item.product_id);
 }
 
 async function fetchRemoteOrdersFull(): Promise<ShopeeOrder[]> {
@@ -522,8 +539,8 @@ async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
 async function fetchRemoteShopeeDataFast(): Promise<RemoteShopeePayload> {
   const [orders, products, inventory] = await Promise.all([
     fetchRemoteOrdersForSync().catch(() => []),
-    fetchRemoteProducts().catch(() => []),
-    fetchRemoteInventory().catch(() => []),
+    fetchRemoteProductsQuick().catch(() => []),
+    fetchRemoteInventoryQuick().catch(() => []),
   ]);
 
   return { orders, products, inventory };
@@ -746,11 +763,13 @@ export async function getShopeeProductsResponse(): Promise<ShopeeReadOnlyApiResp
 
   if (shopeeApiConfigured()) {
     try {
-      const products = await fetchRemoteProducts();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products, inventory: [] });
-      return { source: "shopee_api", data: products, synced_at: syncedAt, readonly: true };
+      const products = await fetchRemoteProductsQuick();
+      if (products.length > 0) {
+        const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products, inventory: [] });
+        return { source: "shopee_api", data: products, synced_at: syncedAt, readonly: true };
+      }
     } catch {
-      // Fall through to direct API fallback, then SQLite cache.
+      // Page reads must stay fast; fall through to SQLite cache if the proxy is busy.
     }
   }
 
@@ -781,11 +800,13 @@ export async function getShopeeInventoryResponse(): Promise<ShopeeReadOnlyApiRes
 
   if (shopeeApiConfigured()) {
     try {
-      const inventory = await fetchRemoteInventory();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products: [], inventory });
-      return { source: "shopee_api", data: inventory, synced_at: syncedAt, readonly: true };
+      const inventory = await fetchRemoteInventoryQuick();
+      if (inventory.length > 0) {
+        const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products: [], inventory });
+        return { source: "shopee_api", data: inventory, synced_at: syncedAt, readonly: true };
+      }
     } catch {
-      // Fall through to direct API fallback, then SQLite cache.
+      // Page reads must stay fast; fall through to SQLite cache if the proxy is busy.
     }
   }
 
