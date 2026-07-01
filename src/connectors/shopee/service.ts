@@ -375,14 +375,7 @@ async function fetchRemoteEndpoint<T>(
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  try {
-    const freshOrders = await fetchRemoteOrdersQuick();
-    if (freshOrders.length > 0) return freshOrders;
-  } catch {
-    // Fall back to the cached snapshot endpoint below.
-  }
-
-  const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 10_000 });
+  const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 8_000 });
   return extractArray<Partial<ShopeeOrder>>(payload, "orders")
     .map(normalizeOrder)
     .filter((item) => item.order_id);
@@ -409,7 +402,7 @@ async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
 
 async function fetchRemoteOrdersForSync(): Promise<ShopeeOrder[]> {
   try {
-    const orders = await fetchRemoteOrdersQuick();
+    const orders = await fetchRemoteOrders();
     if (orders.length > 0) return orders;
   } catch {
     // The proxy may still be building the order snapshot. Do not block web requests.
