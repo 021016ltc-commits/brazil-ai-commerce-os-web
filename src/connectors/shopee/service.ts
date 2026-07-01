@@ -746,6 +746,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
   };
 
   if (!shouldUseMockData() && shopeeApiConfigured()) {
+    let syncStartError: unknown = null;
     try {
       const startResult = await startRemoteShopeeSync();
       return {
@@ -758,6 +759,22 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         message: startResult.message,
       };
     } catch (error) {
+      syncStartError = error;
+    }
+
+    try {
+      payload = await fetchRemoteShopeeDataPartial();
+      const cacheSyncedAt = await writeShopeeCacheBestEffort(payload, syncedAt);
+      return {
+        source: "shopee_api",
+        readonly: true,
+        synced_at: cacheSyncedAt,
+        orders_count: payload.orders.length,
+        products_count: payload.products.length,
+        inventory_count: payload.inventory.length,
+        message: "已通过固定 IP 代理同步授权店铺真实数据。",
+      };
+    } catch (error) {
       return {
         source: "sqlite",
         readonly: true,
@@ -765,7 +782,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         orders_count: 0,
         products_count: 0,
         inventory_count: 0,
-        message: `Shopee background sync did not confirm quickly: ${errorMessage(error)}. Existing data remains available.`,
+        message: `Shopee sync did not complete: ${errorMessage(syncStartError)}; fallback read failed: ${errorMessage(error)}. Existing data remains available.`,
       };
     }
   }
