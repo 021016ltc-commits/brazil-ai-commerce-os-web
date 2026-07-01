@@ -104,9 +104,17 @@ export default function DashboardPage() {
     summary.business_impact.total_profit_impact * 3,
   );
   const lastUpdated = summary.system_status.last_updated_at || "刚刚";
+  const productCount = dashboardData.products.length;
+  const taskCount = taskData.overview.total_tasks || taskData.all_tasks.length || topTasks.length;
+  const opportunityCount = summary.operating_status.today_opportunity_count || topOpportunities.length;
+  const riskAlertCount =
+    summary.operating_status.high_risk_alert_count ||
+    summary.inventory_risk.stockout_risk_count ||
+    summary.inventory_risk.overstock_risk_count ||
+    topRisks.length;
   const hasOperatingData =
-    dashboardData.products.length > 0 ||
-    taskData.overview.total_tasks > 0 ||
+    productCount > 0 ||
+    taskCount > 0 ||
     summary.core_metrics.cash_flow !== 0 ||
     summary.profit_and_cash.cash_flow !== 0 ||
     summary.profit_and_cash.yesterday_net_profit !== 0 ||
@@ -184,35 +192,35 @@ export default function DashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <CompactMetricCard
-          title="今日销售"
-          value={formatBrl(todayGmv)}
-          change="环比 +8.0%"
+          title="已读取商品"
+          value={formatCount(productCount)}
+          change={dashboardData.source === "shopee_api" ? "Shopee 真实数据" : "本地数据"}
           updatedAt={lastUpdated}
           tone="good"
           icon={<TrendingUp className="h-5 w-5" aria-hidden="true" />}
         />
         <CompactMetricCard
-          title="今日利润"
-          value={formatBrl(summary.profit_and_cash.yesterday_net_profit)}
-          change={`净利润率 ${formatPercent(summary.profit_and_cash.net_margin, 1)}`}
+          title="今日任务"
+          value={formatCount(taskCount)}
+          change={`高优先级 ${formatCount(summary.operating_status.high_priority_recommendation_count)} 个`}
           updatedAt={lastUpdated}
           tone="good"
           icon={<CircleDollarSign className="h-5 w-5" aria-hidden="true" />}
         />
         <CompactMetricCard
-          title="库存风险"
-          value={`${summary.inventory_risk.stockout_risk_count} 个`}
-          change={`健康度 ${formatCount(summary.inventory_risk.stock_health_score)} 分`}
+          title="机会商品"
+          value={formatCount(opportunityCount)}
+          change={`风险提醒 ${formatCount(riskAlertCount)} 个`}
           updatedAt={lastUpdated}
-          tone={summary.inventory_risk.stockout_risk_count > 0 ? "risk" : "good"}
+          tone={riskAlertCount > 0 ? "warn" : "good"}
           icon={<Boxes className="h-5 w-5" aria-hidden="true" />}
         />
         <CompactMetricCard
-          title="待处理事项"
-          value={formatCount(summary.ai_pending_approval.pending_count + topTasks.length)}
-          change={`高优先级 ${summary.ai_pending_approval.high_priority_count} 个`}
+          title="订单金额"
+          value={formatBrl(todayGmv)}
+          change={todayGmv > 0 ? "订单已返回金额" : "等待成交金额"}
           updatedAt={lastUpdated}
-          tone={summary.ai_pending_approval.high_priority_count > 0 ? "warn" : "neutral"}
+          tone={todayGmv > 0 ? "good" : "neutral"}
           icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
         />
       </section>

@@ -28,6 +28,13 @@ function sourceLabel(source: ProfitApiResponse["source"]) {
   return dataStatusLabel(source);
 }
 
+function formatNumber(value: number, digits = 0) {
+  return new Intl.NumberFormat("zh-CN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 function sortLabel(sortBy: SortKey) {
   if (sortBy === "revenue") return "按营收排序";
   if (sortBy === "net_margin") return "按净利润率排序";
@@ -143,9 +150,9 @@ export default function ProfitPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs text-slate-500">订单金额</div>
-              <div className="mt-2 text-2xl font-semibold text-forest">{formatBrl(snapshot.cash_flow)}</div>
-              <div className="mt-1 text-xs text-slate-500">来自已授权店铺订单</div>
+              <div className="text-xs text-slate-500">商品利润记录</div>
+              <div className="mt-2 text-2xl font-semibold text-forest">{formatNumber(data.product_profit.length)}</div>
+              <div className="mt-1 text-xs text-slate-500">来自已授权店铺商品池</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
               <div className="text-xs text-slate-500">利润率</div>

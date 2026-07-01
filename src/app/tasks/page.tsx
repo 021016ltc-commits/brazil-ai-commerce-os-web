@@ -333,7 +333,17 @@ export default function TasksPage() {
   const highTasks = filteredTasks.filter((task) => task.priority === "high");
   const mediumTasks = filteredTasks.filter((task) => task.priority === "medium");
   const lowTasks = filteredTasks.filter((task) => task.priority === "low");
-  const hasTaskData = data.overview.total_tasks > 0 || data.all_tasks.length > 0;
+  const totalTaskCount = data.overview.total_tasks || data.all_tasks.length;
+  const highTaskCount =
+    data.overview.high_priority_tasks ||
+    data.all_tasks.filter((task) => task.priority === "high").length;
+  const estimatedProfitImpact =
+    data.overview.estimated_profit_impact ||
+    data.all_tasks.reduce((sum, task) => sum + task.estimated_profit_impact, 0);
+  const estimatedInventoryImpact =
+    data.overview.estimated_inventory_impact ||
+    data.all_tasks.reduce((sum, task) => sum + task.estimated_inventory_impact, 0);
+  const hasTaskData = totalTaskCount > 0 || data.all_tasks.length > 0;
 
   const sourceChartItems = [
     { label: "库存中心", value: data.source_stats.inventory_tasks, color: "bg-forest" },
@@ -374,13 +384,13 @@ export default function TasksPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <KpiCard
               label="今日总任务"
-              value={formatCount(data.overview.total_tasks)}
+              value={formatCount(totalTaskCount)}
               detail="来自库存、利润、审批、分析和机会中心。"
               icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
             />
             <KpiCard
               label="高优先任务"
-              value={formatCount(data.overview.high_priority_tasks)}
+              value={formatCount(highTaskCount)}
               detail="今天应该最先处理的任务。"
               icon={<ShieldAlert className="h-5 w-5" aria-hidden="true" />}
               tone="risk"
@@ -398,10 +408,10 @@ export default function TasksPage() {
           description="总览用于快速判断今天任务量、优先级结构，以及这些任务对利润、GMV 和库存的预计影响。"
         />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="总任务" value={formatCount(data.overview.total_tasks)} detail="今日生成的全部任务。" icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />} />
-          <KpiCard label="高优先级" value={formatCount(data.overview.high_priority_tasks)} detail="需要最先处理。" icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} tone="risk" />
-          <KpiCard label="预计利润影响" value={formatBrl(data.overview.estimated_profit_impact)} detail="预计可保护或提升的利润。" icon={<DollarSign className="h-5 w-5" aria-hidden="true" />} tone="good" />
-          <KpiCard label="库存影响" value={formatCount(data.overview.estimated_inventory_impact)} detail="预计受影响的库存项。" icon={<Boxes className="h-5 w-5" aria-hidden="true" />} tone="warn" />
+          <KpiCard label="总任务" value={formatCount(totalTaskCount)} detail="今日生成的全部任务。" icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />} />
+          <KpiCard label="高优先级" value={formatCount(highTaskCount)} detail="需要最先处理。" icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />} tone="risk" />
+          <KpiCard label="预计利润影响" value={formatBrl(estimatedProfitImpact)} detail="预计可保护或提升的利润。" icon={<DollarSign className="h-5 w-5" aria-hidden="true" />} tone="good" />
+          <KpiCard label="库存影响" value={formatCount(estimatedInventoryImpact)} detail="预计受影响的库存项。" icon={<Boxes className="h-5 w-5" aria-hidden="true" />} tone="warn" />
         </div>
         <ColumnSettingsNote hiddenFields={["中优先级任务数", "低优先级任务数", "销售影响明细", "完整库存影响"]} />
       </section>

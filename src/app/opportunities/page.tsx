@@ -218,9 +218,9 @@ export default function OpportunitiesPage() {
               <div className="mt-1 text-sm text-slate-500">值得优先进入人工判断的高分机会。</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">关键词机会</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{data.keyword_opportunities.length}</div>
-              <div className="mt-1 text-sm text-slate-500">更适合看市场需求和竞争强弱。</div>
+              <div className="text-xs uppercase tracking-wide text-slate-400">已读取商品</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{data.products.length}</div>
+              <div className="mt-1 text-sm text-slate-500">来自已授权店铺的真实商品池。</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
               <div className="text-xs uppercase tracking-wide text-slate-400">高风险提醒</div>

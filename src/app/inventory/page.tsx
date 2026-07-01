@@ -264,14 +264,14 @@ export default function InventoryPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs text-slate-500">库存健康度</div>
-              <div className="mt-2 text-2xl font-semibold text-forest">{formatNumber(snapshot.stock_health_score)}</div>
-              <div className="mt-1 text-xs text-slate-500">周转 {formatNumber(snapshot.inventory_turnover_days, 1)} 天</div>
+              <div className="text-xs text-slate-500">库存SKU</div>
+              <div className="mt-2 text-2xl font-semibold text-forest">{formatNumber(data.inventory_stock.length)}</div>
+              <div className="mt-1 text-xs text-slate-500">来自已授权店铺库存记录</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
-              <div className="text-xs text-slate-500">缺货风险</div>
-              <div className="mt-2 text-2xl font-semibold text-coral">{snapshot.stockout_risk_count}</div>
-              <div className="mt-1 text-xs text-slate-500">需要优先确认</div>
+              <div className="text-xs text-slate-500">库存健康度</div>
+              <div className="mt-2 text-2xl font-semibold text-ink">{formatNumber(snapshot.stock_health_score)}</div>
+              <div className="mt-1 text-xs text-slate-500">周转 {formatNumber(snapshot.inventory_turnover_days, 1)} 天</div>
             </div>
             <div className="rounded-lg border border-line bg-white/90 p-4">
               <div className="text-xs text-slate-500">滞销风险</div>
@@ -300,9 +300,9 @@ export default function InventoryPage() {
           <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
             <div className="flex items-center gap-3 text-ink">
               <Wallet className="h-5 w-5" aria-hidden="true" />
-              <h3 className="text-sm font-semibold">库存总货值</h3>
+              <h3 className="text-sm font-semibold">库存SKU</h3>
             </div>
-            <div className="mt-4 text-2xl font-semibold text-ink">{formatBrl(snapshot.total_inventory_value)}</div>
+            <div className="mt-4 text-2xl font-semibold text-ink">{formatNumber(data.inventory_stock.length)}</div>
           </article>
           <article className="rounded-lg border border-line bg-white p-5 shadow-panel">
             <div className="flex items-center gap-3 text-ink">
