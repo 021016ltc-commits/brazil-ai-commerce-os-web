@@ -377,6 +377,31 @@ async function fetchRemoteShopeeBundle(): Promise<RemoteShopeePayload> {
   return { orders, products, inventory };
 }
 
+async function startRemoteShopeeSync(): Promise<{
+  synced_at: string;
+  orders_count: number;
+  products_count: number;
+  inventory_count: number;
+  message: string;
+}> {
+  const payload = await fetchRemoteJson("sync/start", {});
+  const record = asRecord(payload);
+  const snapshots = asRecord(record.snapshots);
+  const syncState = asRecord(record.sync_state);
+  const syncedAt =
+    cleanText(syncState.completed_at ?? syncState.started_at ?? record.synced_at ?? record.timestamp) || nowIso();
+
+  return {
+    synced_at: syncedAt,
+    orders_count: firstNumber([snapshots.orders_count, record.orders_count], 0),
+    products_count: firstNumber([snapshots.products_count, record.products_count], 0),
+    inventory_count: firstNumber([snapshots.inventory_count, record.inventory_count], 0),
+    message:
+      cleanText(syncState.message ?? record.message) ||
+      "Shopee read-only background sync has started. Refresh the page after it completes.",
+  };
+}
+
 async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
   try {
     const bundle = await fetchRemoteShopeeBundle();
@@ -574,17 +599,7 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
         return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
       }
     } catch {
-      // Try the full proxy sync payload before falling back to cache.
-    }
-
-    try {
-      const bundle = await fetchRemoteShopeeBundle();
-      if (bundle.orders.length > 0) {
-        const syncedAt = await writeShopeeCacheBestEffort(bundle);
-        return { source: "shopee_api", data: bundle.orders, synced_at: syncedAt, readonly: true };
-      }
-    } catch {
-      // Fall through to direct API fallback, then SQLite cache.
+      // Full order synchronization is handled by /api/shopee/sync. Page reads must stay fast.
     }
   }
 
@@ -688,6 +703,21 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
   };
 
   if (!shouldUseMockData() && shopeeApiConfigured()) {
+    try {
+      const startResult = await startRemoteShopeeSync();
+      return {
+        source: "shopee_api",
+        readonly: true,
+        synced_at: startResult.synced_at,
+        orders_count: startResult.orders_count,
+        products_count: startResult.products_count,
+        inventory_count: startResult.inventory_count,
+        message: startResult.message,
+      };
+    } catch {
+      // Fall through to compatibility reads for older proxy deployments.
+    }
+
     try {
       payload = await fetchRemoteShopeeDataPartial();
       source =
