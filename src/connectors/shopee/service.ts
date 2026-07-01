@@ -336,34 +336,81 @@ async function fetchRemoteEndpoint<T>(
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  let orders: Partial<ShopeeOrder>[] = [];
-
   try {
     const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 12_000 });
-    orders = extractArray<Partial<ShopeeOrder>>(payload, "orders");
+    return extractArray<Partial<ShopeeOrder>>(payload, "orders")
+      .map(normalizeOrder)
+      .filter((item) => item.order_id);
   } catch {
-    orders = [];
+    return fetchRemoteOrdersQuick().catch(() => []);
+  }
+}
+
+async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
+  const limit = remoteOrderFastReadItems();
+  const payload = await fetchRemoteJson(
+    "orders",
+    {
+      refresh: 1,
+      days: 14,
+      history_days: 14,
+      limit,
+      max: limit,
+    },
+    { timeoutMs: 25_000 },
+  );
+  return extractArray<Partial<ShopeeOrder>>(payload, "orders")
+    .map(normalizeOrder)
+    .filter((item) => item.order_id);
+}
+
+async function fetchRemoteOrdersForSync(): Promise<ShopeeOrder[]> {
+  try {
+    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 10_000 });
+    const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders")
+      .map(normalizeOrder)
+      .filter((item) => item.order_id);
+    if (orders.length > 0) return orders;
+  } catch {
+    // The proxy may still be building the order snapshot.
   }
 
-  if (orders.length === 0) {
-    try {
-      orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
-        maxItems: remoteOrderFastReadItems(),
-      });
-    } catch {
-      orders = [];
-    }
+  try {
+    const orders = await fetchRemoteOrdersQuick();
+    if (orders.length > 0) return orders;
+  } catch {
+    // Do not block the web request on a full order-history read.
   }
 
-  return orders.map(normalizeOrder).filter((item) => item.order_id);
+  return [];
 }
 
 async function fetchRemoteProducts(): Promise<ShopeeProduct[]> {
+  try {
+    const payload = await fetchRemoteJson("products", {}, { timeoutMs: 12_000 });
+    const products = extractArray<Partial<ShopeeProduct>>(payload, "products");
+    if (products.length > 0) {
+      return products.map(normalizeProduct).filter((item) => item.product_id);
+    }
+  } catch {
+    // Fall back to paginated compatibility mode for older proxies.
+  }
+
   const products = await fetchRemoteEndpoint<Partial<ShopeeProduct>>("products", "products", "product_id");
   return products.map(normalizeProduct).filter((item) => item.product_id);
 }
 
 async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
+  try {
+    const payload = await fetchRemoteJson("inventory", {}, { timeoutMs: 12_000 });
+    const inventory = extractArray<Partial<ShopeeInventoryItem>>(payload, "inventory");
+    if (inventory.length > 0) {
+      return inventory.map(normalizeInventory).filter((item) => item.product_id);
+    }
+  } catch {
+    // Fall back to paginated compatibility mode for older proxies.
+  }
+
   const inventory = await fetchRemoteEndpoint<Partial<ShopeeInventoryItem>>("inventory", "inventory", "product_id");
   return inventory.map(normalizeInventory).filter((item) => item.product_id);
 }
@@ -474,14 +521,10 @@ async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
 
 async function fetchRemoteShopeeDataFast(): Promise<RemoteShopeePayload> {
   const [orders, products, inventory] = await Promise.all([
-    fetchRemoteOrders().catch(() => []),
+    fetchRemoteOrdersForSync().catch(() => []),
     fetchRemoteProducts().catch(() => []),
     fetchRemoteInventory().catch(() => []),
   ]);
-
-  if (orders.length === 0 && products.length === 0 && inventory.length === 0) {
-    return fetchRemoteShopeeDataPartial();
-  }
 
   return { orders, products, inventory };
 }
@@ -777,17 +820,18 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
 
   if (!shouldUseMockData() && shopeeApiConfigured()) {
     let syncStartError: unknown = null;
+    let startResult:
+      | {
+          synced_at: string;
+          orders_count: number;
+          products_count: number;
+          inventory_count: number;
+          message: string;
+        }
+      | null = null;
+
     try {
-      const startResult = await startRemoteShopeeSync();
-      return {
-        source: "shopee_api",
-        readonly: true,
-        synced_at: startResult.synced_at,
-        orders_count: startResult.orders_count,
-        products_count: startResult.products_count,
-        inventory_count: startResult.inventory_count,
-        message: startResult.message,
-      };
+      startResult = await startRemoteShopeeSync();
     } catch (error) {
       syncStartError = error;
     }
@@ -795,6 +839,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
     try {
       payload = await fetchRemoteShopeeDataFast();
       const cacheSyncedAt = await writeShopeeCacheBestEffort(payload, syncedAt);
+      const hasSyncedData = payload.orders.length > 0 || payload.products.length > 0 || payload.inventory.length > 0;
       return {
         source: "shopee_api",
         readonly: true,
@@ -802,7 +847,9 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         orders_count: payload.orders.length,
         products_count: payload.products.length,
         inventory_count: payload.inventory.length,
-        message: "已通过固定 IP 代理同步授权店铺真实数据。",
+        message: hasSyncedData
+          ? "已通过固定 IP 只读代理同步授权店铺真实数据。"
+          : startResult?.message || "已请求同步授权店铺数据，当前没有返回可写入的数据。",
       };
     } catch (error) {
       return {

@@ -283,7 +283,7 @@ export const dataService = {
       message:
         result.message ||
         (result.source === "shopee_api"
-          ? "已同步授权店铺真实数据快照。"
+          ? "已同步授权店铺真实数据。"
           : "已完成店铺数据同步检查。"),
     };
   },
