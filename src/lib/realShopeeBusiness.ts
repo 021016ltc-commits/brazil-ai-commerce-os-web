@@ -1,4 +1,4 @@
-import { getShopeeInventory, getShopeeOrders, getShopeeProducts } from "@/lib/connectors/shopeeAdapter";
+import { getLatestShopeeSnapshot } from "@/lib/connectors/shopeeSyncEngine";
 import type {
   AiRecommendationItem,
   AnalysisApiResponse,
@@ -1016,11 +1016,10 @@ function buildDailyOps(tasks: TasksApiResponse, inventory: InventoryApiResponse,
 }
 
 async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
-  const [ordersResponse, productsResponse, inventoryResponse] = await Promise.all([
-    getShopeeOrders(),
-    getShopeeProducts(),
-    getShopeeInventory(),
-  ]);
+  const snapshot = await getLatestShopeeSnapshot({ maxAgeMs: CACHE_TTL_MS });
+  const ordersResponse = snapshot.orders;
+  const productsResponse = snapshot.products;
+  const inventoryResponse = snapshot.inventory;
 
   const hasRealData = [ordersResponse, productsResponse, inventoryResponse].some(
     (response) => response.source === "shopee_api" && response.data.length > 0,
@@ -1044,8 +1043,8 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
   const dailyOps = buildDailyOps(tasks, inventory, opportunities, profit);
 
   return {
-    source: "shopee_api",
-    generatedAt: nowIso(),
+    source: snapshot.source,
+    generatedAt: snapshot.created_at,
     shopId,
     orders,
     rawProducts,

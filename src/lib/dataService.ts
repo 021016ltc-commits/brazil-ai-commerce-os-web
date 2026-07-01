@@ -28,7 +28,6 @@ import {
   getDecisionHistoryResponse,
   getDecisionMetricsResponse,
 } from "@/lib/decisionFeedbackRepository";
-import * as shopeeAdapter from "@/lib/connectors/shopeeAdapter";
 import {
   getShopeeAnalyticsResponse,
   getShopeeInventoryRiskResponse,
@@ -64,6 +63,8 @@ import {
   getExecutionSimulationSummaryResponse,
 } from "@/lib/execution/virtualExecutionEngine";
 import {
+  clearShopeeSnapshotMemory,
+  createShopeeSnapshotBundle,
   getLatestShopeeSnapshot,
   getShopeeConsistencyReport as getShopeeConsistencyReportFromEngine,
   getShopeeSyncStatus as getShopeeSyncStatusFromEngine,
@@ -77,6 +78,7 @@ import {
   getRealShopeeProductsResponse,
   getRealShopeeProfitResponse,
   getRealShopeeTasksResponse,
+  clearRealShopeeBusinessCache,
 } from "@/lib/realShopeeBusiness";
 import { getSelfOptimizationAnalysisResponse, getSelfOptimizationRecommendationsResponse, getSelfOptimizationResponse } from "@/lib/selfOptimizationRepository";
 import { getSystemHealthResponse } from "@/lib/systemHealth";
@@ -113,6 +115,7 @@ function cacheKey(name: string) {
 
 function clearBusinessCaches() {
   clearCache(`${currentTenantId()}:`);
+  clearRealShopeeBusinessCache();
 }
 
 async function realShopeeOrLocal<T>(
@@ -124,13 +127,30 @@ async function realShopeeOrLocal<T>(
   return localGetter();
 }
 
+async function getShopeeSnapshotResource(resource: "orders" | "products" | "inventory") {
+  const snapshot = await getLatestShopeeSnapshot({ maxAgeMs: shortTtlMs });
+  const current = snapshot[resource];
+  return {
+    source: current.source,
+    data: current.data,
+    timestamp: current.created_at,
+    synced_at: snapshot.created_at,
+    readonly: true,
+    snapshot: {
+      snapshot_id: current.snapshot_id,
+      table_name: current.table_name,
+      bundle_created_at: snapshot.created_at,
+    },
+  };
+}
+
 export const dataService = {
   getProducts() {
     return realShopeeOrLocal(getRealShopeeProductsResponse, getProductsResponse);
   },
 
   getOrders() {
-    return shopeeAdapter.getShopeeOrders();
+    return getShopeeSnapshotResource("orders");
   },
 
   getInventory() {
@@ -232,21 +252,31 @@ export const dataService = {
   },
 
   getShopeeOrders() {
-    return shopeeAdapter.getShopeeOrders();
+    return getShopeeSnapshotResource("orders");
   },
 
   getShopeeProducts() {
-    return shopeeAdapter.getShopeeProducts();
+    return getShopeeSnapshotResource("products");
   },
 
   getShopeeInventory() {
-    return shopeeAdapter.getShopeeInventory();
+    return getShopeeSnapshotResource("inventory");
   },
 
   async syncShopeeData() {
-    const result = await shopeeAdapter.syncShopeeReadOnlyCache();
+    clearShopeeSnapshotMemory();
+    const snapshot = await createShopeeSnapshotBundle();
     clearBusinessCaches();
-    return result;
+    return {
+      source: snapshot.source,
+      timestamp: snapshot.created_at,
+      synced_at: snapshot.created_at,
+      readonly: true,
+      orders_count: snapshot.orders.data.length,
+      products_count: snapshot.products.data.length,
+      inventory_count: snapshot.inventory.data.length,
+      message: "已同步授权店铺真实数据快照。",
+    };
   },
 
   getShopeeSyncStatus() {
