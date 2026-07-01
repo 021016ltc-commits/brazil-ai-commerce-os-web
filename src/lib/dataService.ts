@@ -149,6 +149,22 @@ async function getShopeeSnapshotResource(resource: "orders" | "products" | "inve
   };
 }
 
+async function getShopeeSnapshotOrRealtime(
+  resource: "orders" | "products" | "inventory",
+  realtimeGetter: () => Promise<object>,
+) {
+  try {
+    const snapshot = await getShopeeSnapshotResource(resource);
+    if (Array.isArray(snapshot.data) && snapshot.data.length > 0) {
+      return snapshot;
+    }
+  } catch {
+    // Keep the raw Shopee endpoints usable when the snapshot layer is not ready yet.
+  }
+
+  return realtimeGetter();
+}
+
 export const dataService = {
   getProducts() {
     return realShopeeOrLocal(getRealShopeeProductsResponse, getProductsResponse);
@@ -257,15 +273,21 @@ export const dataService = {
   },
 
   getShopeeOrders() {
-    return withApiCache(cacheKey("shopee-orders"), shortTtlMs, getShopeeOrdersRealtime);
+    return withApiCache(cacheKey("shopee-orders"), shortTtlMs, () =>
+      getShopeeSnapshotOrRealtime("orders", getShopeeOrdersRealtime),
+    );
   },
 
   getShopeeProducts() {
-    return withApiCache(cacheKey("shopee-products"), shortTtlMs, getShopeeProductsRealtime);
+    return withApiCache(cacheKey("shopee-products"), shortTtlMs, () =>
+      getShopeeSnapshotOrRealtime("products", getShopeeProductsRealtime),
+    );
   },
 
   getShopeeInventory() {
-    return withApiCache(cacheKey("shopee-inventory"), shortTtlMs, getShopeeInventoryRealtime);
+    return withApiCache(cacheKey("shopee-inventory"), shortTtlMs, () =>
+      getShopeeSnapshotOrRealtime("inventory", getShopeeInventoryRealtime),
+    );
   },
 
   async syncShopeeData() {
