@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -14,6 +14,7 @@ import { ProfitExperienceCharts } from "@/components/ProfitExperienceCharts";
 import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyProfitResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl, formatPercent } from "@/lib/format";
 import type { Platform, ProductProfitItem, ProfitApiResponse } from "@/types";
 
@@ -74,21 +75,22 @@ export default function ProfitPage() {
   const [profitRiskFilter, setProfitRiskFilter] = useState<ProfitRiskFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("net_profit");
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/profit", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: ProfitApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(fallbackProfit);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/profit", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as ProfitApiResponse;
+      setData(payload);
+    } catch {
+      setData(fallbackProfit);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const platformOptions = Array.from(new Set(data.product_profit.map((item) => item.platform)));
 

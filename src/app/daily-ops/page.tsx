@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -17,6 +17,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { emptyDailyOpsResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { actionTypeLabelZh, riskTypeLabel, sourceModuleLabel, statusLabel, suggestedByLabel } from "@/locales/zh-CN";
 import type {
@@ -193,22 +194,22 @@ function OpportunityCard({ item }: { item: DailyOpsOpportunityItem }) {
 export default function DailyOpsPage() {
   const [data, setData] = useState<DailyOpsApiResponse>(emptyDailyOpsResponse);
 
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/daily-ops", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: DailyOpsApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(emptyDailyOpsResponse);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/daily-ops", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as DailyOpsApiResponse;
+      setData(payload);
+    } catch {
+      setData(emptyDailyOpsResponse);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const riskTotal = useMemo(
     () =>

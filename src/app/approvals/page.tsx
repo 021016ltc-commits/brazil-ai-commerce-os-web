@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyApprovalsResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { buildApprovalHistoryItem, buildApprovalStats, approvalPriorityRank } from "@/lib/approvals";
 import { formatPercent } from "@/lib/format";
 import { priorityLabel, riskLevelLabel } from "@/locales/zh-CN";
@@ -112,6 +113,8 @@ export default function ApprovalsPage() {
       active = false;
     };
   }, []);
+
+  useAutoRefresh(() => refreshApprovals().catch(() => undefined));
 
   const platformOptions = Array.from(new Set(data.approval_queue.map((item) => item.platform)));
 

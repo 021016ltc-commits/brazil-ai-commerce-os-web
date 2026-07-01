@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Boxes,
@@ -23,6 +23,7 @@ import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { emptyDashboardResponse, emptyTasksResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { priorityLabel, riskLevelLabel, riskTypeLabel, sourceModuleLabel } from "@/locales/zh-CN";
 import type { DashboardSummaryApiResponse, RiskLevel, TasksApiResponse } from "@/types";
@@ -60,38 +61,36 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
+  const loadData = useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true);
     setLoadError("");
 
-    Promise.all([
-      fetch("/api/dashboard-summary", { cache: "no-store" }).then((response) =>
-        response.ok ? response.json() : Promise.reject(new Error("dashboard-summary")),
-      ),
-      fetch("/api/tasks", { cache: "no-store" }).then((response) =>
-        response.ok ? response.json() : Promise.reject(new Error("tasks")),
-      ),
-    ])
-      .then(([dashboardPayload, taskPayload]) => {
-        if (!active) return;
-        setDashboardData(dashboardPayload as DashboardSummaryApiResponse);
-        setTaskData(taskPayload as TasksApiResponse);
-      })
-      .catch(() => {
-        if (!active) return;
-        setDashboardData(emptyDashboardResponse);
-        setTaskData(emptyTasksResponse);
-        setLoadError("正式数据暂时不可用，当前页面不展示测试数据。请检查数据连接或平台只读连接。");
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
+    try {
+      const [dashboardPayload, taskPayload] = await Promise.all([
+        fetch("/api/dashboard-summary", { cache: "no-store" }).then((response) =>
+          response.ok ? response.json() : Promise.reject(new Error("dashboard-summary")),
+        ),
+        fetch("/api/tasks", { cache: "no-store" }).then((response) =>
+          response.ok ? response.json() : Promise.reject(new Error("tasks")),
+        ),
+      ]);
 
-    return () => {
-      active = false;
-    };
+      setDashboardData(dashboardPayload as DashboardSummaryApiResponse);
+      setTaskData(taskPayload as TasksApiResponse);
+    } catch {
+      setDashboardData(emptyDashboardResponse);
+      setTaskData(emptyTasksResponse);
+      setLoadError("正式数据暂时不可用，请检查店铺授权或只读数据连接。");
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData(true);
+  }, [loadData]);
+
+  useAutoRefresh(() => loadData(false));
 
   const summary = dashboardData.dashboard_summary;
   const topTasks = taskData.top_tasks.slice(0, 5);

@@ -21,6 +21,7 @@ import {
   emptyShopeeProductsResponse,
 } from "@/data/emptyResponses";
 import { readStoredUser } from "@/lib/permissions";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { shopeeOrderStatusLabel } from "@/locales/zh-CN";
 import type {
   PlatformShopBindingPublicItem,
@@ -244,6 +245,8 @@ export default function ShopeePage() {
       active = false;
     };
   }, [refreshData]);
+
+  useAutoRefresh(() => refreshData().catch(() => undefined));
 
   useEffect(() => {
     const syncUser = () => setIsAdmin(Boolean(readStoredUser()?.roles.includes("admin")));

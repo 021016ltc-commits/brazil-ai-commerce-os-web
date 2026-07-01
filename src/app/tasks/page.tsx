@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -19,6 +19,7 @@ import {
 import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyTasksResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type {
   TaskPriority,
   TaskSourceModule,
@@ -300,22 +301,22 @@ export default function TasksPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("default");
 
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/tasks", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: TasksApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(fallbackTasks);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tasks", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as TasksApiResponse;
+      setData(payload);
+    } catch {
+      setData(fallbackTasks);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const filteredTasks = useMemo(() => {
     return sortTasks(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyAnalysisResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import {
   analysisPriorityRank,
   riskLevelRank,
@@ -105,21 +106,22 @@ export default function AnalysisPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("opportunity_score");
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/analysis", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: AnalysisApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(fallbackAnalysis);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/analysis", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as AnalysisApiResponse;
+      setData(payload);
+    } catch {
+      setData(fallbackAnalysis);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const platformOptions = Array.from(
     new Set([

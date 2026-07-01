@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -14,6 +14,7 @@ import { InventoryExperienceCharts } from "@/components/InventoryExperienceChart
 import { ColumnSettingsNote, dataStatusLabel } from "@/components/OperatorControls";
 import { RealDataReadiness } from "@/components/RealDataReadiness";
 import { emptyInventoryResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl } from "@/lib/format";
 import { riskTypeLabel } from "@/locales/zh-CN";
 import type {
@@ -128,21 +129,22 @@ export default function InventoryPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("days_of_stock");
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/inventory", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: InventoryApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(fallbackInventory);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/inventory", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as InventoryApiResponse;
+      setData(payload);
+    } catch {
+      setData(fallbackInventory);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const platformOptions = Array.from(new Set(data.inventory_stock.map((item) => item.platform)));
   const stockMap = new Map(data.inventory_stock.map((item) => [item.product_uid, item]));

@@ -16,6 +16,7 @@ import { ActionsExperienceCharts } from "@/components/ModuleExperienceCharts";
 import { dataStatusLabel } from "@/components/OperatorControls";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyActionHistoryResponse, emptyActionQueueResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl, formatCount, formatPercent } from "@/lib/format";
 import { readStoredUser } from "@/lib/permissions";
 import { actionTypeLabelZh, statusLabel, suggestedByLabel, zhCN } from "@/locales/zh-CN";
@@ -113,6 +114,8 @@ export default function ActionsPage() {
       setHistoryData(fallbackHistory);
     });
   }, []);
+
+  useAutoRefresh(() => refreshData().catch(() => undefined));
 
   const pendingActions = useMemo(
     () => queueData.queue.filter((item) => item.status === "pending"),

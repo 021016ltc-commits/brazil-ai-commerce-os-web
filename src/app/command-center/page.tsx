@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -20,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { dataStatusLabel } from "@/components/OperatorControls";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import {
   emptyDailyOpsResponse,
   emptyDashboardResponse,
@@ -275,25 +276,24 @@ export default function CommandCenterPage() {
   const [state, setState] = useState<CommandState>(fallbackState);
   const [loadedAt, setLoadedAt] = useState(new Date().toISOString());
 
-  useEffect(() => {
-    let active = true;
-
-    Promise.all([
+  const loadData = useCallback(async () => {
+    const [dashboard, tasks, dailyOps, systemHealth, verification] = await Promise.all([
       readApi<DashboardSummaryApiResponse>("/api/dashboard-summary", emptyDashboardResponse),
       readApi<TasksApiResponse>("/api/tasks", emptyTasksResponse),
       readApi<DailyOpsApiResponse>("/api/daily-ops", emptyDailyOpsResponse),
       readApi<SystemHealthApiResponse>("/api/system-health", emptySystemHealthResponse),
       readApi<VerificationStatusApiResponse>("/api/verification/status", emptyVerificationResponse),
-    ]).then(([dashboard, tasks, dailyOps, systemHealth, verification]) => {
-      if (!active) return;
-      setState({ dashboard, tasks, dailyOps, systemHealth, verification });
-      setLoadedAt(new Date().toISOString());
-    });
+    ]);
 
-    return () => {
-      active = false;
-    };
+    setState({ dashboard, tasks, dailyOps, systemHealth, verification });
+    setLoadedAt(new Date().toISOString());
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const commandData = useMemo(() => {
     const highProfitTasks = state.tasks.all_tasks

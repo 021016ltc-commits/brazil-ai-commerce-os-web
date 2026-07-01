@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDownWideNarrow,
   BadgeAlert,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { emptyOpportunitiesResponse } from "@/data/emptyResponses";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatBrl } from "@/lib/format";
 import {
   riskLevelRank,
@@ -109,21 +110,22 @@ export default function OpportunitiesPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("opportunity_score");
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/opportunities", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((payload: OpportunitiesApiResponse) => {
-        if (active) setData(payload);
-      })
-      .catch(() => {
-        if (active) setData(fallbackOpportunities);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch("/api/opportunities", { cache: "no-store" });
+      if (!response.ok) throw new Error("load failed");
+      const payload = (await response.json()) as OpportunitiesApiResponse;
+      setData(payload);
+    } catch {
+      setData(fallbackOpportunities);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   const platformOptions = Array.from(new Set(data.today_opportunities.map((item) => item.platform)));
   const productScoreMap = new Map(data.today_opportunities.map((item) => [item.product_uid, item]));
