@@ -68,6 +68,8 @@ let activeSnapshotRefresh: Promise<ShopeeSnapshotBundle> | null = null;
 
 const SNAPSHOT_TYPE = "shopee_readonly_bundle";
 const DEFAULT_SNAPSHOT_MAX_AGE_MS = Number(process.env.SHOPEE_SNAPSHOT_MAX_AGE_MS ?? 60_000);
+const DEFAULT_SNAPSHOT_PART_WAIT_MS = Number(process.env.SHOPEE_SNAPSHOT_PART_WAIT_MS ?? 12_000);
+const DEFAULT_ORDER_SNAPSHOT_WAIT_MS = Number(process.env.SHOPEE_ORDER_SNAPSHOT_WAIT_MS ?? 2_500);
 const SNAPSHOT_FILE = path.join(
   process.env.SHOPEE_SNAPSHOT_DIR || (process.env.VERCEL ? "/tmp/brazil-ai-commerce-os" : path.join(process.cwd(), "data", "runtime")),
   "shopee-readonly-snapshot.json",
@@ -79,6 +81,30 @@ function nowIso() {
 
 function snapshotId(kind: SnapshotKind) {
   return `shopee_${kind}_snapshot_${Date.now()}`;
+}
+
+function boundedWaitMs(value: number, fallback: number) {
+  return Math.max(500, Math.min(12_000, Number.isFinite(value) ? value : fallback));
+}
+
+function emptySnapshot<T>(kind: SnapshotKind): Snapshot<T> {
+  return {
+    snapshot_id: snapshotId(kind),
+    table_name: `shopee_${kind}_snapshot`,
+    source: "sqlite",
+    created_at: nowIso(),
+    data: [],
+    readonly: true,
+  };
+}
+
+async function snapshotWithTimeout<T>(kind: SnapshotKind, snapshotPromise: Promise<Snapshot<T>>, waitMs: number) {
+  const guardedPromise = snapshotPromise.catch(() => emptySnapshot<T>(kind));
+  const timeoutPromise = new Promise<Snapshot<T>>((resolve) => {
+    setTimeout(() => resolve(emptySnapshot<T>(kind)), boundedWaitMs(waitMs, DEFAULT_SNAPSHOT_PART_WAIT_MS));
+  });
+
+  return Promise.race([guardedPromise, timeoutPromise]);
 }
 
 function resolveSource(sources: ShopeeDataSource[]): ShopeeDataSource {
@@ -456,9 +482,9 @@ export async function createShopeeSnapshotBundle(): Promise<ShopeeSnapshotBundle
 
   activeSnapshotRefresh = (async () => {
     const [orders, products, inventory] = await Promise.all([
-      syncOrdersSnapshot(),
-      syncProductsSnapshot(),
-      syncInventorySnapshot(),
+      snapshotWithTimeout("orders", syncOrdersSnapshot(), DEFAULT_ORDER_SNAPSHOT_WAIT_MS),
+      snapshotWithTimeout("products", syncProductsSnapshot(), DEFAULT_SNAPSHOT_PART_WAIT_MS),
+      snapshotWithTimeout("inventory", syncInventorySnapshot(), DEFAULT_SNAPSHOT_PART_WAIT_MS),
     ]);
 
     const bundle = {
