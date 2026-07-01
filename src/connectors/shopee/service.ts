@@ -456,6 +456,20 @@ async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
   return { orders, products, inventory };
 }
 
+async function fetchRemoteShopeeDataFast(): Promise<RemoteShopeePayload> {
+  const [orders, products, inventory] = await Promise.all([
+    fetchRemoteOrders().catch(() => []),
+    fetchRemoteProducts().catch(() => []),
+    fetchRemoteInventory().catch(() => []),
+  ]);
+
+  if (orders.length === 0 && products.length === 0 && inventory.length === 0) {
+    return fetchRemoteShopeeDataPartial();
+  }
+
+  return { orders, products, inventory };
+}
+
 async function readCachedOrders() {
   return withDatabase((db) =>
     asRows<ShopeeOrderRow>(
@@ -763,7 +777,7 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
     }
 
     try {
-      payload = await fetchRemoteShopeeDataPartial();
+      payload = await fetchRemoteShopeeDataFast();
       const cacheSyncedAt = await writeShopeeCacheBestEffort(payload, syncedAt);
       return {
         source: "shopee_api",
