@@ -1,5 +1,3 @@
-import { Buffer } from "node:buffer";
-
 import {
   getInventory as getShopeeInventoryRealtime,
   getOrders as getShopeeOrdersRealtime,
@@ -148,19 +146,7 @@ function asNumber(value: unknown, fallback = 0) {
 function cleanText(value: unknown, fallback: string) {
   const raw = asString(value, "");
   if (!raw) return fallback;
-
-  let text = raw;
-  const looksMojibake = /Ã|Â|�/.test(text);
-  if (looksMojibake) {
-    try {
-      const decoded = Buffer.from(text, "latin1").toString("utf8");
-      if (decoded && !/Ã|Â|�/.test(decoded)) text = decoded;
-    } catch {
-      text = raw;
-    }
-  }
-
-  return text.replace(/\s+/g, " ").trim() || fallback;
+  return raw.replace(/\s+/g, " ").trim() || fallback;
 }
 
 function hashText(value: string) {

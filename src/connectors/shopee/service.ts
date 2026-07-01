@@ -187,6 +187,11 @@ function remoteOrderFastReadItems() {
   return Math.max(50, Math.min(200, Number.isFinite(configured) ? configured : 50));
 }
 
+function remoteOrderHistoryDays() {
+  const configured = Number(process.env.SHOPEE_ORDER_HISTORY_DAYS ?? 180);
+  return Math.max(1, Math.min(180, Number.isFinite(configured) ? configured : 180));
+}
+
 function remoteMaxSyncItems() {
   const configured = Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? process.env.SHOPEE_FULL_SYNC_MAX_ITEMS ?? 10000);
   return Math.max(50, Math.min(50000, Number.isFinite(configured) ? configured : 10000));
@@ -370,7 +375,14 @@ async function fetchRemoteEndpoint<T>(
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 5_000 });
+  try {
+    const freshOrders = await fetchRemoteOrdersQuick();
+    if (freshOrders.length > 0) return freshOrders;
+  } catch {
+    // Fall back to the cached snapshot endpoint below.
+  }
+
+  const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 10_000 });
   return extractArray<Partial<ShopeeOrder>>(payload, "orders")
     .map(normalizeOrder)
     .filter((item) => item.order_id);
@@ -378,16 +390,17 @@ async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
 
 async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
   const limit = remoteOrderFastReadItems();
+  const historyDays = remoteOrderHistoryDays();
   const payload = await fetchRemoteJson(
     "orders",
     {
       refresh: 1,
-      days: 14,
-      history_days: 14,
+      days: historyDays,
+      history_days: historyDays,
       limit,
       max: limit,
     },
-    { timeoutMs: 10_000 },
+    { timeoutMs: 30_000 },
   );
   return extractArray<Partial<ShopeeOrder>>(payload, "orders")
     .map(normalizeOrder)
@@ -396,10 +409,7 @@ async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
 
 async function fetchRemoteOrdersForSync(): Promise<ShopeeOrder[]> {
   try {
-    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 5_000 });
-    const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders")
-      .map(normalizeOrder)
-      .filter((item) => item.order_id);
+    const orders = await fetchRemoteOrdersQuick();
     if (orders.length > 0) return orders;
   } catch {
     // The proxy may still be building the order snapshot. Do not block web requests.

@@ -45,13 +45,11 @@ function formatNumber(value: number, digits = 0) {
 }
 
 function stockStatusLabel(status: StockStatus) {
-  return {
-    healthy: "健康",
-    reorder_soon: "即将补货",
-    stockout_risk: "断货风险",
-    overstock_risk: "积压风险",
-    slow_moving: "慢动销",
-  }[status];
+  if (status === "healthy") return "健康";
+  if (status === "reorder_soon") return "即将补货";
+  if (status === "stockout_risk") return "断货风险";
+  if (status === "overstock_risk") return "积压风险";
+  return "慢动销";
 }
 
 function stockStatusBadge(status: StockStatus) {
@@ -79,11 +77,9 @@ function reorderPriorityRank(priority: AnalysisPriority) {
 }
 
 function reorderPriorityLabel(priority: AnalysisPriority) {
-  return {
-    P1: "P1 / 优先补货",
-    P2: "P2 / 进入复核",
-    P3: "P3 / 保持观察",
-  }[priority];
+  if (priority === "P1") return "P1 / 优先补货";
+  if (priority === "P2") return "P2 / 进入复核";
+  return "P3 / 保持观察";
 }
 
 function reorderPriorityBadge(priority: AnalysisPriority) {
@@ -95,12 +91,10 @@ function reorderPriorityBadge(priority: AnalysisPriority) {
 }
 
 function sortLabel(sortBy: SortKey) {
-  return {
-    days_of_stock: "按库存天数",
-    stock_qty: "按库存数量",
-    stockout_risk: "按断货风险",
-    reorder_priority: "按补货优先级",
-  }[sortBy];
+  if (sortBy === "days_of_stock") return "按库存天数";
+  if (sortBy === "stock_qty") return "按库存数量";
+  if (sortBy === "stockout_risk") return "按断货风险";
+  return "按补货优先级";
 }
 
 function SectionHeader({

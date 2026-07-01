@@ -50,11 +50,9 @@ function sourceLabel(source: TasksApiResponse["source"]) {
 }
 
 function priorityLabel(priority: TaskPriority) {
-  return {
-    high: "高优先级",
-    medium: "中优先级",
-    low: "低优先级",
-  }[priority];
+  if (priority === "high") return "高优先级";
+  if (priority === "medium") return "中优先级";
+  return "低优先级";
 }
 
 function priorityBadge(priority: TaskPriority) {
@@ -66,34 +64,28 @@ function priorityBadge(priority: TaskPriority) {
 }
 
 function sourceModuleLabel(source: TaskSourceModule) {
-  return {
-    inventory: "库存中心",
-    profit: "利润中心",
-    approval: "审批中心",
-    analysis: "数据分析",
-    opportunity: "机会中心",
-  }[source];
+  if (source === "inventory") return "库存中心";
+  if (source === "profit") return "利润中心";
+  if (source === "approval") return "审批中心";
+  if (source === "analysis") return "数据分析";
+  return "机会中心";
 }
 
 function taskTypeLabel(type: TodayTaskItem["task_type"]) {
-  return {
-    inventory_alert: "库存预警",
-    profit_alert: "利润异常",
-    approval_review: "待审批",
-    opportunity_follow_up: "机会跟进",
-    risk_handling: "高风险处理",
-    analysis_review: "分析复核",
-  }[type];
+  if (type === "inventory_alert") return "库存预警";
+  if (type === "profit_alert") return "利润异常";
+  if (type === "approval_review") return "待审批";
+  if (type === "opportunity_follow_up") return "机会跟进";
+  if (type === "risk_handling") return "高风险处理";
+  return "分析复核";
 }
 
 function impactTypeLabel(type: TodayTaskItem["impact_type"]) {
-  return {
-    profit: "利润影响",
-    gmv: "GMV影响",
-    inventory: "库存影响",
-    risk: "风险影响",
-    approval: "审批影响",
-  }[type];
+  if (type === "profit") return "利润影响";
+  if (type === "gmv") return "GMV影响";
+  if (type === "inventory") return "库存影响";
+  if (type === "risk") return "风险影响";
+  return "审批影响";
 }
 
 function riskRank(level: TodayTaskItem["risk_level"]) {
@@ -118,7 +110,7 @@ function taskStatusBadge(task: TodayTaskItem) {
     处理中: "border-blue-200 bg-blue-50 text-blue-700",
     已完成: "border-emerald-200 bg-emerald-50 text-forest",
     已忽略: "border-slate-200 bg-slate-50 text-slate-600",
-  } as Record<string, string>)[status];
+  } as Record<string, string>)[status] ?? "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function sortTasks(items: TodayTaskItem[], sortBy: SortKey) {
