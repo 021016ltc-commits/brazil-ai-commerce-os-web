@@ -794,6 +794,7 @@ function buildDashboard(
   analysis: AnalysisApiResponse,
 ): DashboardSummaryApiResponse {
   const gmv = totalRevenue(aggs);
+  const inventoryRiskTotal = inventory.inventory_risks.length;
   const highRisk = inventory.inventory_risks.filter((risk) => risk.risk_level === "high").length;
   const lowProfit = profit.profit_risk.low_profit_products;
   const generatedAt = nowIso();
@@ -813,7 +814,7 @@ function buildDashboard(
     operating_status: {
       today_opportunity_count: opportunities.today_opportunities.length,
       high_priority_recommendation_count: tasks.overview.high_priority_tasks,
-      stockout_risk_count: inventory.snapshot.stockout_risk_count,
+      stockout_risk_count: inventoryRiskTotal,
       low_profit_product_count: lowProfit,
       high_risk_alert_count: highRisk,
     },
@@ -827,7 +828,7 @@ function buildDashboard(
     inventory_risk: {
       inventory_turnover_days: inventory.snapshot.inventory_turnover_days,
       stock_health_score: inventory.snapshot.stock_health_score,
-      stockout_risk_count: inventory.snapshot.stockout_risk_count,
+      stockout_risk_count: inventoryRiskTotal,
       overstock_risk_count: inventory.snapshot.overstock_risk_count,
       slow_moving_sku_count: inventory.snapshot.slow_moving_sku_count,
     },
@@ -971,6 +972,7 @@ function buildDashboard(
 }
 
 function buildDailyOps(tasks: TasksApiResponse, inventory: InventoryApiResponse, opportunities: OpportunitiesApiResponse, profit: ProfitApiResponse): DailyOpsApiResponse {
+  const inventoryRiskTotal = inventory.inventory_risks.length;
   const topRisks = inventory.inventory_risks.slice(0, 5).map((risk) => ({
     risk_id: risk.risk_id,
     risk_type: risk.risk_type,
@@ -996,7 +998,7 @@ function buildDailyOps(tasks: TasksApiResponse, inventory: InventoryApiResponse,
       href: task.href,
     })),
     risk_overview: {
-      stockout_risk_count: inventory.snapshot.stockout_risk_count,
+      stockout_risk_count: inventoryRiskTotal,
       profit_decline_risk_count: profit.profit_risk.low_profit_products,
       high_risk_product_count: inventory.inventory_risks.filter((risk) => risk.risk_level === "high").length,
       approval_backlog_count: 0,
