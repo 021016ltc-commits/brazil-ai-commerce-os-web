@@ -186,7 +186,7 @@ function inferShopIdFromData(orders: RealOrder[], products: RealProduct[], inven
 
 function productTitle(agg: ProductAgg) {
   if (agg.title.trim()) return agg.title.trim();
-  return `${PLATFORM} 商品 ${agg.productId}`;
+  return `${PLATFORM} item ${agg.productId}`;
 }
 
 function buildAggregations(orders: RealOrder[], products: RealProduct[], inventory: RealInventoryItem[]) {
