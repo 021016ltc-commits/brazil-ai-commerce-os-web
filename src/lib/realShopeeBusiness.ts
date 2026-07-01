@@ -1,4 +1,9 @@
 import { getLatestShopeeSnapshot } from "@/lib/connectors/shopeeSyncEngine";
+import {
+  getInventory as getShopeeInventoryRealtime,
+  getOrders as getShopeeOrdersRealtime,
+  getProducts as getShopeeProductsRealtime,
+} from "@/lib/connectors/shopee";
 import type {
   AiRecommendationItem,
   AnalysisApiResponse,
@@ -107,8 +112,58 @@ type RealShopeeBusinessBundle = {
 
 let cachedBundle: { value: RealShopeeBusinessBundle | null; expiresAt: number } | null = null;
 
+type BusinessDataResponse<T> = {
+  source: ShopeeDataSource;
+  data: T[];
+  created_at: string;
+  readonly: true;
+};
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+function isRealResponse(response: BusinessDataResponse<unknown>) {
+  return response.source === "shopee_api" && response.data.length > 0;
+}
+
+function fromReadOnlyResponse<T>(
+  response: { source: ShopeeDataSource; data: T[]; synced_at: string | null; readonly: true },
+  fallbackCreatedAt: string,
+): BusinessDataResponse<T> {
+  return {
+    source: response.source,
+    data: response.data,
+    created_at: response.synced_at ?? fallbackCreatedAt,
+    readonly: true,
+  };
+}
+
+async function withRealtimeTimeout<T>(promise: Promise<T>, waitMs: number): Promise<T | null> {
+  return Promise.race([
+    promise.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), waitMs)),
+  ]);
+}
+
+async function replaceEmptySnapshot<T>(
+  current: BusinessDataResponse<T>,
+  getter: () => Promise<{ source: ShopeeDataSource; data: T[]; synced_at: string | null; readonly: true }>,
+  waitMs: number,
+) {
+  if (isRealResponse(current)) return current;
+
+  const realtime = await withRealtimeTimeout(getter(), waitMs);
+  if (!realtime) return current;
+
+  const candidate = fromReadOnlyResponse(realtime, current.created_at);
+  return isRealResponse(candidate) ? candidate : current;
+}
+
+function resolveBusinessSource(responses: Array<BusinessDataResponse<unknown>>): ShopeeDataSource {
+  if (responses.some((response) => response.source === "shopee_api" && response.data.length > 0)) return "shopee_api";
+  if (responses.some((response) => response.source === "sqlite")) return "sqlite";
+  return "mock";
 }
 
 function todayDate() {
@@ -1038,9 +1093,38 @@ function buildDailyOps(tasks: TasksApiResponse, inventory: InventoryApiResponse,
 
 async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
   const snapshot = await getLatestShopeeSnapshot({ maxAgeMs: CACHE_TTL_MS });
-  const ordersResponse = snapshot.orders;
-  const productsResponse = snapshot.products;
-  const inventoryResponse = snapshot.inventory;
+  const [ordersResponse, productsResponse, inventoryResponse] = await Promise.all([
+    replaceEmptySnapshot(
+      {
+        source: snapshot.orders.source,
+        data: snapshot.orders.data,
+        created_at: snapshot.orders.created_at,
+        readonly: true,
+      },
+      getShopeeOrdersRealtime,
+      4_000,
+    ),
+    replaceEmptySnapshot(
+      {
+        source: snapshot.products.source,
+        data: snapshot.products.data,
+        created_at: snapshot.products.created_at,
+        readonly: true,
+      },
+      getShopeeProductsRealtime,
+      12_000,
+    ),
+    replaceEmptySnapshot(
+      {
+        source: snapshot.inventory.source,
+        data: snapshot.inventory.data,
+        created_at: snapshot.inventory.created_at,
+        readonly: true,
+      },
+      getShopeeInventoryRealtime,
+      12_000,
+    ),
+  ]);
 
   const hasRealData = [ordersResponse, productsResponse, inventoryResponse].some(
     (response) => response.source === "shopee_api" && response.data.length > 0,
@@ -1064,8 +1148,8 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
   const dailyOps = buildDailyOps(tasks, inventory, opportunities, profit);
 
   return {
-    source: snapshot.source,
-    generatedAt: snapshot.created_at,
+    source: resolveBusinessSource([ordersResponse, productsResponse, inventoryResponse]),
+    generatedAt: nowIso(),
     shopId,
     orders,
     rawProducts,

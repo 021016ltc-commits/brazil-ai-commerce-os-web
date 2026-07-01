@@ -68,7 +68,7 @@ let activeSnapshotRefresh: Promise<ShopeeSnapshotBundle> | null = null;
 
 const SNAPSHOT_TYPE = "shopee_readonly_bundle";
 const DEFAULT_SNAPSHOT_MAX_AGE_MS = Number(process.env.SHOPEE_SNAPSHOT_MAX_AGE_MS ?? 60_000);
-const DEFAULT_SNAPSHOT_PART_WAIT_MS = Number(process.env.SHOPEE_SNAPSHOT_PART_WAIT_MS ?? 12_000);
+const DEFAULT_SNAPSHOT_PART_WAIT_MS = Number(process.env.SHOPEE_SNAPSHOT_PART_WAIT_MS ?? 35_000);
 const DEFAULT_ORDER_SNAPSHOT_WAIT_MS = Number(process.env.SHOPEE_ORDER_SNAPSHOT_WAIT_MS ?? 2_500);
 const SNAPSHOT_FILE = path.join(
   process.env.SHOPEE_SNAPSHOT_DIR || (process.env.VERCEL ? "/tmp/brazil-ai-commerce-os" : path.join(process.cwd(), "data", "runtime")),
@@ -84,7 +84,7 @@ function snapshotId(kind: SnapshotKind) {
 }
 
 function boundedWaitMs(value: number, fallback: number) {
-  return Math.max(500, Math.min(12_000, Number.isFinite(value) ? value : fallback));
+  return Math.max(500, Math.min(45_000, Number.isFinite(value) ? value : fallback));
 }
 
 function emptySnapshot<T>(kind: SnapshotKind): Snapshot<T> {
@@ -105,6 +105,15 @@ async function snapshotWithTimeout<T>(kind: SnapshotKind, snapshotPromise: Promi
   });
 
   return Promise.race([guardedPromise, timeoutPromise]);
+}
+
+function hasRealSnapshotRows<T>(snapshot: Snapshot<T> | null | undefined) {
+  return snapshot?.source === "shopee_api" && snapshot.data.length > 0;
+}
+
+function keepPreviousRealRows<T>(candidate: Snapshot<T>, previous: Snapshot<T> | null | undefined) {
+  if (hasRealSnapshotRows(candidate) || !hasRealSnapshotRows(previous)) return candidate;
+  return previous as Snapshot<T>;
 }
 
 function resolveSource(sources: ShopeeDataSource[]): ShopeeDataSource {
@@ -481,11 +490,15 @@ export async function createShopeeSnapshotBundle(): Promise<ShopeeSnapshotBundle
   if (activeSnapshotRefresh) return activeSnapshotRefresh;
 
   activeSnapshotRefresh = (async () => {
-    const [orders, products, inventory] = await Promise.all([
+    const previousSnapshot = latestSnapshot ?? (await readLatestPersistedSnapshot());
+    const [ordersCandidate, productsCandidate, inventoryCandidate] = await Promise.all([
       snapshotWithTimeout("orders", syncOrdersSnapshot(), DEFAULT_ORDER_SNAPSHOT_WAIT_MS),
       snapshotWithTimeout("products", syncProductsSnapshot(), DEFAULT_SNAPSHOT_PART_WAIT_MS),
       snapshotWithTimeout("inventory", syncInventorySnapshot(), DEFAULT_SNAPSHOT_PART_WAIT_MS),
     ]);
+    const orders = keepPreviousRealRows(ordersCandidate, previousSnapshot?.orders);
+    const products = keepPreviousRealRows(productsCandidate, previousSnapshot?.products);
+    const inventory = keepPreviousRealRows(inventoryCandidate, previousSnapshot?.inventory);
 
     const bundle = {
       source: resolveSource([orders.source, products.source, inventory.source]),
