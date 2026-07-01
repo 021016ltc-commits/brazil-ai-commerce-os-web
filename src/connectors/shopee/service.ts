@@ -64,7 +64,7 @@ function valueOf<T extends Record<string, unknown>>(value: T, key: string) {
 
 function cleanText(value: unknown) {
   let text = String(value ?? "").trim();
-  for (let attempt = 0; attempt < 2 && /[\u00c2\u00c3]/.test(text); attempt += 1) {
+  for (let attempt = 0; attempt < 2 && /[\u00c2\u00c3\u00e2\u0080-\u009f]/.test(text); attempt += 1) {
     try {
       text = Buffer.from(text, "latin1").toString("utf8");
     } catch {
