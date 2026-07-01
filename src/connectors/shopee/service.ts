@@ -202,6 +202,15 @@ async function fetchRemotePage<T>(path: string, key: string, params: Record<stri
   items: T[];
   pageInfo: RemotePageInfo;
 }> {
+  const payload = await fetchRemoteJson(path, params);
+  const items = extractArray<T>(payload, key);
+  return {
+    items,
+    pageInfo: readPaginationInfo(payload, Number(params.offset ?? 0), Number(params.page_size ?? 50)),
+  };
+}
+
+async function fetchRemoteJson(path: string, params: Record<string, string | number>): Promise<unknown> {
   const baseUrl = process.env.SHOPEE_READONLY_API_BASE_URL?.trim();
   if (!baseUrl) throw new Error("Shopee read-only API base URL is not configured.");
 
@@ -228,12 +237,7 @@ async function fetchRemotePage<T>(path: string, key: string, params: Record<stri
     throw new Error(`Shopee read-only endpoint ${path} returned ${response.status}.`);
   }
 
-  const payload = await response.json();
-  const items = extractArray<T>(payload, key);
-  return {
-    items,
-    pageInfo: readPaginationInfo(payload, Number(params.offset ?? 0), Number(params.page_size ?? 50)),
-  };
+  return response.json();
 }
 
 async function fetchRemoteEndpoint<T>(path: string, key: string, preferredKey: string): Promise<T[]> {
@@ -307,7 +311,32 @@ async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
   return inventory.map(normalizeInventory).filter((item) => item.product_id);
 }
 
+async function fetchRemoteShopeeBundle(): Promise<RemoteShopeePayload> {
+  const maxItems = remoteMaxSyncItems();
+  const pageSize = remotePageSize(maxItems);
+  const payload = await fetchRemoteJson("sync", {
+    all: 1,
+    full: 1,
+    limit: maxItems,
+    max: maxItems,
+    page_size: pageSize,
+  });
+  const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders").map(normalizeOrder).filter((item) => item.order_id);
+  const products = extractArray<Partial<ShopeeProduct>>(payload, "products").map(normalizeProduct).filter((item) => item.product_id);
+  const inventory = extractArray<Partial<ShopeeInventoryItem>>(payload, "inventory")
+    .map(normalizeInventory)
+    .filter((item) => item.product_id);
+  return { orders, products, inventory };
+}
+
 async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
+  try {
+    const bundle = await fetchRemoteShopeeBundle();
+    if (bundle.orders.length > 0 || bundle.products.length > 0 || bundle.inventory.length > 0) return bundle;
+  } catch {
+    // Fall through to individual endpoints for compatibility with older proxies.
+  }
+
   const [orders, products, inventory] = await Promise.all([
     fetchRemoteOrders().catch(() => []),
     fetchRemoteProducts().catch(() => []),

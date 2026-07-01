@@ -11,9 +11,14 @@ const BASE_URL = (process.env.SHOPEE_OPEN_API_BASE_URL || process.env.SHOPEE_API
 const PARTNER_ID = String(process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || process.env.SHOPEE_API_KEY || "").trim();
 const PARTNER_KEY = String(process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || process.env.SHOPEE_SECRET || "").trim();
 const PROXY_AUTH_TOKEN = String(process.env.PROXY_AUTH_TOKEN || "").trim();
-const ORDER_SYNC_DAYS = Math.max(1, Math.min(14, Number(process.env.SHOPEE_ORDER_SYNC_DAYS || 14)));
+const ORDER_WINDOW_DAYS = Math.max(1, Math.min(14, Number(process.env.SHOPEE_ORDER_SYNC_DAYS || 14)));
+const ORDER_HISTORY_DAYS = Math.max(
+  ORDER_WINDOW_DAYS,
+  Math.min(730, Number(process.env.SHOPEE_ORDER_HISTORY_DAYS || process.env.SHOPEE_FULL_ORDER_SYNC_DAYS || 180)),
+);
 const MAX_SYNC_ITEMS = Math.max(50, Math.min(50000, Number(process.env.SHOPEE_FULL_SYNC_MAX_ITEMS || process.env.SHOPEE_MAX_SYNC_ITEMS || 10000)));
 const PAGE_SIZE = Math.max(10, Math.min(100, Number(process.env.SHOPEE_PAGE_SIZE || 50)));
+const SERVICE_VERSION = "2026-07-01.full-pagination-v2";
 
 function nowIso() {
   return new Date().toISOString();
@@ -239,10 +244,7 @@ async function activeBinding() {
   return ensureFreshBinding(binding);
 }
 
-async function fetchOrders(binding) {
-  const timeTo = nowSeconds();
-  const timeFrom = timeTo - ORDER_SYNC_DAYS * 24 * 60 * 60;
-  const orderSns = [];
+async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns) {
   let cursor = "";
   while (orderSns.length < MAX_SYNC_ITEMS) {
     const payload = await shopeeGet("/api/v2/order/get_order_list", {
@@ -259,6 +261,19 @@ async function fetchOrders(binding) {
     const nextCursor = String(response.next_cursor || payload.next_cursor || "");
     if (!more || !nextCursor) break;
     cursor = nextCursor;
+  }
+}
+
+async function fetchOrders(binding) {
+  const now = nowSeconds();
+  const historyFrom = now - ORDER_HISTORY_DAYS * 24 * 60 * 60;
+  const orderSns = [];
+  let windowTo = now;
+
+  while (windowTo > historyFrom && orderSns.length < MAX_SYNC_ITEMS) {
+    const windowFrom = Math.max(historyFrom, windowTo - ORDER_WINDOW_DAYS * 24 * 60 * 60 + 1);
+    await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns);
+    windowTo = windowFrom - 1;
   }
 
   const uniqueOrderSns = Array.from(new Set(orderSns)).slice(0, MAX_SYNC_ITEMS);
@@ -352,7 +367,16 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
     if (url.pathname === "/health") {
-      return json(res, 200, { ok: true, readonly: true, configured: Boolean(PARTNER_ID && PARTNER_KEY), timestamp: nowIso() });
+      return json(res, 200, {
+        ok: true,
+        readonly: true,
+        configured: Boolean(PARTNER_ID && PARTNER_KEY),
+        version: SERVICE_VERSION,
+        order_history_days: ORDER_HISTORY_DAYS,
+        page_size: PAGE_SIZE,
+        max_sync_items: MAX_SYNC_ITEMS,
+        timestamp: nowIso(),
+      });
     }
 
     if (!auth(req)) return json(res, 401, { error: "Unauthorized", readonly: true });
