@@ -1102,7 +1102,7 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
         readonly: true,
       },
       getShopeeOrdersRealtime,
-      4_000,
+      10_000,
     ),
     replaceEmptySnapshot(
       {

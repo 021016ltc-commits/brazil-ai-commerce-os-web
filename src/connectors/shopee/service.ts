@@ -145,8 +145,8 @@ function remoteFastReadItems() {
 }
 
 function remoteOrderFastReadItems() {
-  const configured = Number(process.env.SHOPEE_ORDER_FAST_READ_ITEMS ?? 10);
-  return Math.max(5, Math.min(200, Number.isFinite(configured) ? configured : 10));
+  const configured = Number(process.env.SHOPEE_ORDER_FAST_READ_ITEMS ?? 50);
+  return Math.max(50, Math.min(200, Number.isFinite(configured) ? configured : 50));
 }
 
 function remoteMaxSyncItems() {
