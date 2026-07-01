@@ -122,6 +122,10 @@ async function fetchRemoteEndpoint<T>(path: string, key: string): Promise<T[]> {
   if (!baseUrl) throw new Error("Shopee read-only API base URL is not configured.");
 
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const maxItems = Math.max(50, Math.min(1000, Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? 200) || 200));
+  if (!url.searchParams.has("limit")) url.searchParams.set("limit", String(maxItems));
+  if (!url.searchParams.has("max")) url.searchParams.set("max", String(maxItems));
+  if (!url.searchParams.has("page_size")) url.searchParams.set("page_size", String(Math.min(100, maxItems)));
   const headers: HeadersInit = {
     Accept: "application/json",
   };

@@ -1,12 +1,14 @@
-import { buildProfitRisk, buildCostStructure } from "@/lib/profit";
 import { getShopeeInventory, getShopeeOrders, getShopeeProducts } from "@/lib/connectors/shopeeAdapter";
 import type {
   AiRecommendationItem,
   AnalysisApiResponse,
+  AnalysisPriority,
   CrawlLog,
-  DailyOpsApiResponse,
+  DashboardMetric,
+  DashboardRisk,
   DashboardSummary,
   DashboardSummaryApiResponse,
+  DailyOpsApiResponse,
   DataQualityReport,
   InventoryApiResponse,
   InventoryRiskItem,
@@ -20,27 +22,40 @@ import type {
   OpportunitiesApiResponse,
   OpportunityRiskAlert,
   OpportunityScore,
+  Platform,
   Product,
   ProductProfitItem,
   ProfitApiResponse,
+  ProfitCostStructureItem,
+  ProfitRiskSummary,
   ProfitSnapshot,
   ReorderRecommendationItem,
   RiskAnalysisItem,
   RiskLevel,
   ShopeeDataSource,
+  StockStatus,
+  TaskImpactType,
+  TaskPriority,
+  TaskSourceModule,
   TasksApiResponse,
+  TaskType,
   TodayTaskItem,
-  TopTaskItem,
 } from "@/types";
+
+const PLATFORM: Platform = "Shopee";
+const MARKET_CODE = "br";
+const CURRENCY = "BRL" as const;
+const SHOP_ID_FALLBACK = "authorized_shop";
+const REVIEW_STATUS_PENDING = "pending_review" as const;
+const CACHE_TTL_MS = 60_000;
 
 type RealOrder = {
   order_id: string;
   product_id: string;
-  sku: string;
+  sku?: string;
   quantity: number;
   price: number;
   status: string;
-  order_status: string;
   created_at: string;
 };
 
@@ -49,7 +64,6 @@ type RealProduct = {
   title: string;
   price: number;
   stock: number;
-  sales: number;
   sales_count: number;
 };
 
@@ -61,45 +75,43 @@ type RealInventoryItem = {
 
 type ProductAgg = {
   productId: string;
-  productUid: string;
   title: string;
   price: number;
   stock: number;
-  quantity: number;
-  revenue: number;
+  reservedStock: number;
+  orderQty: number;
   orderCount: number;
-  lastOrderAt: string;
+  revenue: number;
+  latestOrderAt: string | null;
+  hasProductRecord: boolean;
+  hasInventoryRecord: boolean;
 };
 
 type RealShopeeBusinessBundle = {
   source: ShopeeDataSource;
   generatedAt: string;
-  syncedAt: string;
+  shopId: string;
   orders: RealOrder[];
-  productsRaw: RealProduct[];
-  inventoryRaw: RealInventoryItem[];
-  productAgg: ProductAgg[];
+  rawProducts: RealProduct[];
+  rawInventory: RealInventoryItem[];
+  aggregations: ProductAgg[];
   products: Product[];
-  profit: ProfitApiResponse;
-  inventory: InventoryApiResponse;
   opportunities: OpportunitiesApiResponse;
   analysis: AnalysisApiResponse;
   tasks: TasksApiResponse;
+  profit: ProfitApiResponse;
+  inventory: InventoryApiResponse;
   dashboard: DashboardSummaryApiResponse;
   dailyOps: DailyOpsApiResponse;
 };
 
-const CACHE_TTL_MS = 30_000;
-const SHOPEE_PLATFORM = "Shopee" as const;
-const MARKET_CODE = "br";
-
-let cachedBundle: { expiresAt: number; value: RealShopeeBusinessBundle | null } | null = null;
+let cachedBundle: { value: RealShopeeBusinessBundle | null; expiresAt: number } | null = null;
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function today() {
+function todayDate() {
   return nowIso().slice(0, 10);
 }
 
@@ -107,160 +119,429 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function safeNumber(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function round(value: number, decimals = 2) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
-function toProductUid(productId: string) {
-  return `product_shopee_br_${productId}`;
+function uid(prefix: string, value: string) {
+  return `${prefix}_${String(value || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-function latest(values: string[]) {
-  return values
-    .filter(Boolean)
-    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
+function productUid(productId: string) {
+  return `Shopee_${productId}`;
 }
 
-function riskRank(level: RiskLevel) {
-  return { high: 3, medium: 2, low: 1 }[level];
+function sellerUid(shopId: string) {
+  return `seller_Shopee_${shopId || SHOP_ID_FALLBACK}`;
 }
 
-function productTitle(productId: string, productMap: Map<string, RealProduct>) {
-  return productMap.get(productId)?.title || `${SHOPEE_PLATFORM} 商品 ${productId}`;
+function keywordUid(keyword: string) {
+  let hash = 0;
+  for (let i = 0; i < keyword.length; i += 1) {
+    hash = (hash * 31 + keyword.charCodeAt(i)) >>> 0;
+  }
+  return `kw_br_${hash.toString(16)}`;
 }
 
-function normalizeOrder(order: RealOrder): RealOrder {
+function normalizeOrder(value: unknown): RealOrder {
+  const record = value as Partial<RealOrder>;
   return {
-    order_id: String(order.order_id || ""),
-    product_id: String(order.product_id || ""),
-    sku: String(order.sku || ""),
-    quantity: Math.max(1, safeNumber(order.quantity || 1)),
-    price: safeNumber(order.price),
-    status: String(order.status || order.order_status || "unknown"),
-    order_status: String(order.order_status || order.status || "unknown"),
-    created_at: String(order.created_at || nowIso()),
+    order_id: String(record.order_id ?? ""),
+    product_id: String(record.product_id ?? ""),
+    sku: record.sku ? String(record.sku) : undefined,
+    quantity: Number(record.quantity ?? 0) || 0,
+    price: Number(record.price ?? 0) || 0,
+    status: String(record.status ?? "unknown"),
+    created_at: String(record.created_at ?? nowIso()),
   };
 }
 
-function aggregateProducts(
-  orders: RealOrder[],
-  productsRaw: RealProduct[],
-  inventoryRaw: RealInventoryItem[],
-): ProductAgg[] {
-  const productMap = new Map(productsRaw.map((item) => [String(item.product_id), item]));
-  const inventoryMap = new Map(inventoryRaw.map((item) => [String(item.product_id), item]));
-  const aggMap = new Map<string, ProductAgg>();
+function normalizeProduct(value: unknown): RealProduct {
+  const record = value as Partial<RealProduct>;
+  return {
+    product_id: String(record.product_id ?? ""),
+    title: String(record.title ?? ""),
+    price: Number(record.price ?? 0) || 0,
+    stock: Number(record.stock ?? 0) || 0,
+    sales_count: Number(record.sales_count ?? 0) || 0,
+  };
+}
 
-  for (const product of productsRaw) {
-    const productId = String(product.product_id || "");
-    if (!productId) continue;
-    const inventory = inventoryMap.get(productId);
-    aggMap.set(productId, {
-      productId,
-      productUid: toProductUid(productId),
-      title: product.title || productTitle(productId, productMap),
-      price: safeNumber(product.price),
-      stock: Math.max(safeNumber(product.stock), safeNumber(inventory?.available_stock)),
-      quantity: 0,
-      revenue: 0,
-      orderCount: 0,
-      lastOrderAt: "",
-    });
+function normalizeInventory(value: unknown): RealInventoryItem {
+  const record = value as Partial<RealInventoryItem>;
+  return {
+    product_id: String(record.product_id ?? ""),
+    available_stock: Number(record.available_stock ?? 0) || 0,
+    reserved_stock: Number(record.reserved_stock ?? 0) || 0,
+  };
+}
+
+function inferShopIdFromData(orders: RealOrder[], products: RealProduct[], inventory: RealInventoryItem[]) {
+  const firstProduct = products.find((item) => item.product_id)?.product_id;
+  const firstInventory = inventory.find((item) => item.product_id)?.product_id;
+  const firstOrder = orders.find((item) => item.product_id)?.product_id;
+  return firstProduct || firstInventory || firstOrder || SHOP_ID_FALLBACK;
+}
+
+function productTitle(agg: ProductAgg) {
+  if (agg.title.trim()) return agg.title.trim();
+  return `${PLATFORM} 商品 ${agg.productId}`;
+}
+
+function buildAggregations(orders: RealOrder[], products: RealProduct[], inventory: RealInventoryItem[]) {
+  const map = new Map<string, ProductAgg>();
+
+  function ensure(productId: string) {
+    const id = String(productId || "unknown");
+    if (!map.has(id)) {
+      map.set(id, {
+        productId: id,
+        title: "",
+        price: 0,
+        stock: 0,
+        reservedStock: 0,
+        orderQty: 0,
+        orderCount: 0,
+        revenue: 0,
+        latestOrderAt: null,
+        hasProductRecord: false,
+        hasInventoryRecord: false,
+      });
+    }
+    return map.get(id)!;
+  }
+
+  for (const product of products) {
+    if (!product.product_id) continue;
+    const agg = ensure(product.product_id);
+    agg.title = product.title || agg.title;
+    agg.price = product.price || agg.price;
+    agg.stock = product.stock || agg.stock;
+    agg.orderQty = Math.max(agg.orderQty, product.sales_count || 0);
+    agg.hasProductRecord = true;
+  }
+
+  for (const stock of inventory) {
+    if (!stock.product_id) continue;
+    const agg = ensure(stock.product_id);
+    agg.stock = stock.available_stock;
+    agg.reservedStock = stock.reserved_stock;
+    agg.hasInventoryRecord = true;
   }
 
   for (const order of orders) {
-    const productId = String(order.product_id || "");
-    if (!productId) continue;
-    const existing =
-      aggMap.get(productId) ??
-      ({
-        productId,
-        productUid: toProductUid(productId),
-        title: productTitle(productId, productMap),
-        price: 0,
-        stock: safeNumber(inventoryMap.get(productId)?.available_stock),
-        quantity: 0,
-        revenue: 0,
-        orderCount: 0,
-        lastOrderAt: "",
-      } satisfies ProductAgg);
-    const quantity = Math.max(1, safeNumber(order.quantity || 1));
-    existing.quantity += quantity;
-    existing.orderCount += 1;
-    existing.revenue += safeNumber(order.price) * quantity;
-    existing.price = existing.price || safeNumber(order.price);
-    existing.lastOrderAt = latest([existing.lastOrderAt, order.created_at]) ?? existing.lastOrderAt;
-    aggMap.set(productId, existing);
+    if (!order.product_id) continue;
+    const agg = ensure(order.product_id);
+    const qty = Math.max(1, order.quantity || 1);
+    agg.orderQty += qty;
+    agg.orderCount += 1;
+    agg.revenue += (order.price || agg.price || 0) * qty;
+    agg.price = agg.price || order.price || 0;
+    if (!agg.latestOrderAt || new Date(order.created_at).getTime() > new Date(agg.latestOrderAt).getTime()) {
+      agg.latestOrderAt = order.created_at;
+    }
   }
 
-  return [...aggMap.values()].sort((left, right) => {
-    const revenueDelta = right.revenue - left.revenue;
-    if (revenueDelta !== 0) return revenueDelta;
-    return right.quantity - left.quantity;
-  });
+  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue || b.orderQty - a.orderQty);
 }
 
-function totalOrderRevenue(orders: RealOrder[]) {
-  return orders.reduce((sum, order) => {
-    const quantity = Math.max(1, safeNumber(order.quantity || 1));
-    return sum + safeNumber(order.price) * quantity;
-  }, 0);
+function hasMeaningfulStockData(inventory: RealInventoryItem[], products: RealProduct[]) {
+  return inventory.some((item) => item.available_stock > 0 || item.reserved_stock > 0) || products.some((item) => item.stock > 0);
 }
 
-function buildProducts(agg: ProductAgg[], generatedAt: string): Product[] {
-  return agg.map((item) => ({
-    product_uid: item.productUid,
-    seller_uid: "seller_shopee_bound_shop",
-    keyword_uid: `kw_br_${item.productId}`,
-    platform: SHOPEE_PLATFORM,
+function totalRevenue(aggs: ProductAgg[]) {
+  return round(aggs.reduce((sum, item) => sum + item.revenue, 0));
+}
+
+function buildProducts(aggs: ProductAgg[], shopId: string): Product[] {
+  return aggs.map((item) => ({
+    product_uid: productUid(item.productId),
+    seller_uid: sellerUid(shopId),
+    keyword_uid: keywordUid(productTitle(item)),
+    platform: PLATFORM,
     market_code: MARKET_CODE,
     platform_product_id: item.productId,
-    platform_shop_id: "bound_shop",
-    title: item.title,
-    title_current: item.title,
-    price_amount: item.price,
-    market_currency: "BRL",
+    platform_shop_id: shopId,
+    title: productTitle(item),
+    title_current: productTitle(item),
+    price_amount: round(item.price),
+    market_currency: CURRENCY,
     rating: 0,
     review_count: 0,
-    sold_count_text: `${item.quantity} 件真实订单销量`,
-    snapshot_date: generatedAt.slice(0, 10),
-    availability_status: item.stock > 0 ? "in_stock" : "stock_detail_pending",
+    sold_count_text: item.orderQty > 0 ? `${item.orderQty} 件真实订单销量` : "暂无订单销量",
+    snapshot_date: todayDate(),
+    availability_status: item.hasInventoryRecord ? "数据正常" : "库存详情待确认",
   }));
 }
 
-function buildProfit(
-  agg: ProductAgg[],
-  inventorySnapshot: InventorySnapshot,
-  generatedAt: string,
-  source: ShopeeDataSource,
-  fallbackRevenue = 0,
-): ProfitApiResponse {
-  const productRevenue = agg.reduce((sum, item) => sum + item.revenue, 0);
-  const totalRevenue = productRevenue > 0 ? productRevenue : fallbackRevenue;
-  const productProfit: ProductProfitItem[] = agg.slice(0, 50).map((item) => ({
-    profit_item_id: `profit_real_${item.productId}`,
-    product_uid: item.productUid,
-    platform: SHOPEE_PLATFORM,
-    product_name: item.title,
-    revenue: item.revenue,
-    cost: 0,
-    gross_profit: 0,
-    net_profit: 0,
-    net_margin: 0,
-    inventory_days: inventorySnapshot.inventory_turnover_days,
-    risk_level: item.revenue > 0 ? "medium" : "low",
+function opportunityLevel(score: number): "A" | "B" | "C" {
+  if (score >= 82) return "A";
+  if (score >= 68) return "B";
+  return "C";
+}
+
+function opportunityScore(item: ProductAgg) {
+  return clamp(Math.round(52 + item.orderQty * 4 + item.orderCount * 2 + item.revenue / 100), 45, 96);
+}
+
+function marketScore(item: ProductAgg) {
+  return clamp(Math.round(50 + item.orderQty * 3 + item.revenue / 160), 45, 92);
+}
+
+function riskLevelFromOpportunity(score: number): RiskLevel {
+  if (score >= 82) return "low";
+  if (score >= 65) return "medium";
+  return "high";
+}
+
+function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRisks: InventoryRiskItem[]): OpportunitiesApiResponse {
+  const opportunityProducts = aggs
+    .filter((item) => item.orderQty > 0 || item.revenue > 0)
+    .slice(0, 12)
+    .map<OpportunityProductItem>((item) => {
+      const score = opportunityScore(item);
+      return {
+        product_uid: productUid(item.productId),
+        platform: PLATFORM,
+        title_current: productTitle(item),
+        price_amount: round(item.price),
+        rating: 0,
+        sold_count_text: `${item.orderQty} 件真实订单销量`,
+        market_score: marketScore(item),
+        opportunity_score: score,
+        recommendation_level: opportunityLevel(score),
+        decision_notes: "基于已授权店铺真实订单生成，建议先核对库存、成本和广告承接。",
+        risk_level: riskLevelFromOpportunity(score),
+        risk_score: clamp(100 - score, 5, 70),
+      };
+    });
+
+  const keywords: Keyword[] = [
+    {
+      keyword_uid: keywordUid("Shopee 真实订单商品"),
+      platform: PLATFORM,
+      market_code: MARKET_CODE,
+      keyword: "Shopee 真实订单商品",
+      normalized_keyword: "shopee_real_order_products",
+      category_hint: "真实店铺成交商品",
+      search_volume_index: opportunityProducts.length,
+      trend_direction: opportunityProducts.length > 0 ? "up" : "flat",
+    },
+  ];
+
+  const market_score: MarketScore[] = keywords.map((keyword, index) => ({
+    market_score_id: uid("market_score", `${keyword.keyword_uid}_${index}`),
+    keyword_uid: keyword.keyword_uid,
+    platform: PLATFORM,
+    market_code: MARKET_CODE,
+    keyword: keyword.keyword || keyword.normalized_keyword,
+    market_demand_score: clamp(60 + opportunityProducts.length * 2, 40, 90),
+    competition_score: 50,
+    trend_score: opportunityProducts.length > 0 ? 72 : 50,
+    total_score: opportunityProducts.length > 0 ? 72 : 50,
   }));
 
+  const opportunity_score: OpportunityScore[] = opportunityProducts.map((item) => ({
+    opportunity_id: uid("opp", item.product_uid),
+    product_uid: item.product_uid,
+    keyword_uid: keywords[0].keyword_uid,
+    category_hint: "真实店铺成交商品",
+    market_demand_score: item.market_score,
+    competition_score: 50,
+    market_score: item.market_score,
+    opportunity_score: item.opportunity_score,
+    recommendation_level: item.recommendation_level,
+    suggestion_level: item.recommendation_level,
+    decision_notes: item.decision_notes,
+    risk_level: item.risk_level,
+    risk_score: item.risk_score,
+    reason: "来自已授权店铺订单、商品和库存数据。",
+  }));
+
+  const keyword_opportunities: KeywordOpportunityItem[] = market_score.map((score) => ({
+    keyword_uid: score.keyword_uid,
+    keyword: score.keyword,
+    category_hint: "真实店铺成交商品",
+    market_demand_score: score.market_demand_score,
+    competition_score: score.competition_score,
+    trend_score: score.trend_score,
+    total_score: score.total_score,
+    platform: PLATFORM,
+  }));
+
+  const risk_alerts: OpportunityRiskAlert[] = inventoryRisks.slice(0, 10).map((risk) => ({
+    risk_id: risk.risk_id,
+    risk_type: risk.risk_type,
+    risk_level: risk.risk_level,
+    affected_product: products.find((product) => product.product_uid === risk.product_uid)?.title_current || risk.product_uid,
+    platform: PLATFORM,
+    product_uid: risk.product_uid,
+    reason: risk.risk_reason,
+    suggested_action: risk.suggested_action,
+  }));
+
+  return {
+    source: "shopee_api",
+    products,
+    keywords,
+    market_score,
+    opportunity_score,
+    today_opportunities: opportunityProducts,
+    keyword_opportunities,
+    risk_alerts,
+  };
+}
+
+function stockStatus(item: ProductAgg, meaningfulStock: boolean): StockStatus {
+  if (!meaningfulStock || !item.hasInventoryRecord) return "healthy";
+  if (item.stock <= 0 && item.orderQty > 0) return "stockout_risk";
+  const dailySales = Math.max(0.1, item.orderQty / 14);
+  const days = item.stock / dailySales;
+  if (days < 5) return "stockout_risk";
+  if (days < 12) return "reorder_soon";
+  if (days > 90 && item.orderQty <= 1) return "slow_moving";
+  if (days > 120) return "overstock_risk";
+  return "healthy";
+}
+
+function statusRiskLevel(status: StockStatus): RiskLevel {
+  if (status === "stockout_risk") return "high";
+  if (status === "reorder_soon" || status === "overstock_risk" || status === "slow_moving") return "medium";
+  return "low";
+}
+
+function statusReason(status: StockStatus, item: ProductAgg, meaningfulStock: boolean) {
+  if (!meaningfulStock || !item.hasInventoryRecord) return "Shopee 当前只返回了商品和订单，库存明细仍需继续同步或授权对应范围。";
+  if (status === "stockout_risk") return "近期有真实订单，但可用库存偏低，需要人工确认是否断货。";
+  if (status === "reorder_soon") return "按近 14 天订单估算，可售天数偏低。";
+  if (status === "slow_moving") return "库存可售天数偏高，且近期订单较少。";
+  if (status === "overstock_risk") return "库存量高于当前销售速度。";
+  return "库存与订单暂未显示明显异常。";
+}
+
+function statusAction(status: StockStatus, meaningfulStock: boolean) {
+  if (!meaningfulStock) return "先完成库存详情同步，再做补货或断货判断。";
+  if (status === "stockout_risk") return "人工核对仓库库存，必要时创建补货审批。";
+  if (status === "reorder_soon") return "准备补货计划，但不要自动下单。";
+  if (status === "slow_moving" || status === "overstock_risk") return "检查价格、广告和活动承接，避免继续压货。";
+  return "继续观察。";
+}
+
+function buildInventory(aggs: ProductAgg[], meaningfulStock: boolean): InventoryApiResponse {
+  const inventory_stock: InventoryStockItem[] = aggs.map((item) => {
+    const dailySales = round(item.orderQty / 14, 2);
+    const status = stockStatus(item, meaningfulStock);
+    const daysOfStock = meaningfulStock && dailySales > 0 ? round(item.stock / dailySales, 1) : 0;
+    const reorderPoint = Math.ceil(Math.max(1, dailySales * 7));
+    return {
+      inventory_item_id: uid("inventory", item.productId),
+      product_uid: productUid(item.productId),
+      product_name: productTitle(item),
+      platform: PLATFORM,
+      stock_qty: item.stock,
+      daily_sales_avg: dailySales,
+      days_of_stock: daysOfStock,
+      reorder_point: reorderPoint,
+      suggested_reorder_qty: status === "stockout_risk" || status === "reorder_soon" ? Math.ceil(Math.max(0, dailySales * 21 - item.stock)) : 0,
+      stock_status: status,
+    };
+  });
+
+  const inventory_risks: InventoryRiskItem[] = inventory_stock
+    .filter((item) => item.stock_status !== "healthy")
+    .map((item) => ({
+      risk_id: uid("inventory_risk", item.product_uid),
+      product_uid: item.product_uid,
+      platform: PLATFORM,
+      risk_type: item.stock_status === "stockout_risk" ? "缺货风险" : "库存效率风险",
+      risk_level: statusRiskLevel(item.stock_status),
+      risk_reason: statusReason(item.stock_status, aggs.find((agg) => productUid(agg.productId) === item.product_uid)!, meaningfulStock),
+      suggested_action: statusAction(item.stock_status, meaningfulStock),
+    }));
+
+  const reorder_recommendations: ReorderRecommendationItem[] = inventory_stock
+    .filter((item) => item.stock_status === "stockout_risk" || item.stock_status === "reorder_soon")
+    .map((item) => ({
+      recommendation_id: uid("reorder", item.product_uid),
+      product_uid: item.product_uid,
+      product_name: item.product_name,
+      platform: PLATFORM,
+      current_stock: item.stock_qty,
+      daily_sales_avg: item.daily_sales_avg,
+      lead_time_days: 14,
+      recommended_reorder_qty: item.suggested_reorder_qty,
+      reorder_priority: item.stock_status === "stockout_risk" ? "P1" : "P2",
+      decision_notes: "仅生成补货建议，不会自动采购或修改平台库存。",
+    }));
+
+  const stockout = inventory_stock.filter((item) => item.stock_status === "stockout_risk").length;
+  const overstock = inventory_stock.filter((item) => item.stock_status === "overstock_risk").length;
+  const slowMoving = inventory_stock.filter((item) => item.stock_status === "slow_moving").length;
+  const riskPenalty = stockout * 14 + overstock * 8 + slowMoving * 6;
+  const stockHealth = meaningfulStock ? clamp(100 - riskPenalty, 0, 100) : 70;
+  const totalInventoryValue = round(inventory_stock.reduce((sum, item) => {
+    const agg = aggs.find((entry) => productUid(entry.productId) === item.product_uid);
+    return sum + item.stock_qty * (agg?.price || 0);
+  }, 0));
+  const inventoryTurnover = meaningfulStock
+    ? round(inventory_stock.reduce((sum, item) => sum + item.days_of_stock, 0) / Math.max(1, inventory_stock.length), 1)
+    : 0;
+
+  const snapshot: InventorySnapshot = {
+    inventory_snapshot_id: uid("inventory_snapshot", todayDate()),
+    reporting_date: todayDate(),
+    market_code: MARKET_CODE,
+    total_inventory_value: totalInventoryValue,
+    inventory_turnover_days: inventoryTurnover,
+    stock_health_score: stockHealth,
+    stockout_risk_count: stockout,
+    overstock_risk_count: overstock,
+    slow_moving_sku_count: slowMoving,
+  };
+
+  return {
+    source: "shopee_api",
+    snapshot,
+    inventory_stock,
+    inventory_risks,
+    reorder_recommendations,
+  };
+}
+
+function buildProfit(aggs: ProductAgg[], inventory: InventoryApiResponse): ProfitApiResponse {
+  const gmv = totalRevenue(aggs);
+  const product_profit: ProductProfitItem[] = aggs
+    .filter((item) => item.revenue > 0 || item.orderQty > 0)
+    .map((item) => ({
+      profit_item_id: uid("profit", item.productId),
+      product_uid: productUid(item.productId),
+      platform: PLATFORM,
+      product_name: productTitle(item),
+      revenue: round(item.revenue),
+      cost: 0,
+      gross_profit: 0,
+      net_profit: 0,
+      net_margin: 0,
+      inventory_days: inventory.inventory_stock.find((stock) => stock.product_uid === productUid(item.productId))?.days_of_stock || 0,
+      risk_level: item.revenue > 0 ? "medium" : "low",
+    }));
+
+  const profit_risk: ProfitRiskSummary = {
+    loss_products: 0,
+    low_profit_products: product_profit.filter((item) => item.revenue > 0 && item.net_margin < 10).length,
+    high_risk_products: product_profit.filter((item) => item.risk_level === "high").length,
+  };
+
   const snapshot: ProfitSnapshot = {
-    profit_snapshot_id: `profit_real_shopee_${generatedAt.slice(0, 10)}`,
-    reporting_date: generatedAt.slice(0, 10),
-    market_code: "br",
+    profit_snapshot_id: uid("profit_snapshot", todayDate()),
+    reporting_date: todayDate(),
+    market_code: MARKET_CODE,
     yesterday_net_profit: 0,
     month_net_profit: 0,
     net_margin: 0,
-    cash_flow: totalRevenue,
-    inventory_turnover_days: inventorySnapshot.inventory_turnover_days,
+    cash_flow: gmv,
+    inventory_turnover_days: inventory.snapshot.inventory_turnover_days,
     procurement_cost: 0,
     advertising_cost: 0,
     logistics_cost: 0,
@@ -268,465 +549,261 @@ function buildProfit(
     tax_cost: 0,
   };
 
+  const cost_structure: ProfitCostStructureItem[] = [
+    { cost_key: "procurement_cost", label: "采购成本", value: 0, share: 0 },
+    { cost_key: "advertising_cost", label: "广告成本", value: 0, share: 0 },
+    { cost_key: "logistics_cost", label: "物流成本", value: 0, share: 0 },
+    { cost_key: "platform_commission", label: "平台佣金", value: 0, share: 0 },
+    { cost_key: "tax_cost", label: "税费", value: 0, share: 0 },
+  ];
+
   return {
-    source,
+    source: "shopee_api",
     snapshot,
-    cost_structure: buildCostStructure(snapshot),
-    profit_risk: buildProfitRisk(productProfit),
-    product_profit: productProfit,
+    cost_structure,
+    profit_risk,
+    product_profit,
   };
 }
 
-function buildInventory(agg: ProductAgg[], generatedAt: string, source: ShopeeDataSource): InventoryApiResponse {
-  const hasStockSignal = agg.some((item) => item.stock > 0);
-  const inventoryStock: InventoryStockItem[] = agg.slice(0, 100).map((item) => {
-    const dailySalesAvg = item.quantity / 14;
-    const daysOfStock = item.stock > 0 && dailySalesAvg > 0 ? item.stock / dailySalesAvg : 0;
-    const stockStatus =
-      hasStockSignal && item.stock <= 0 && item.quantity > 0
-        ? "stockout_risk"
-        : hasStockSignal && item.stock > 0 && daysOfStock < 5
-          ? "reorder_soon"
-          : !hasStockSignal
-            ? "healthy"
-            : "healthy";
-    return {
-      inventory_item_id: `inventory_real_${item.productId}`,
-      product_uid: item.productUid,
-      product_name: item.title,
-      platform: SHOPEE_PLATFORM,
-      stock_qty: item.stock,
-      daily_sales_avg: Number(dailySalesAvg.toFixed(2)),
-      days_of_stock: Number(daysOfStock.toFixed(1)),
-      reorder_point: Number((dailySalesAvg * 7).toFixed(0)),
-      suggested_reorder_qty:
-        stockStatus === "stockout_risk" || stockStatus === "reorder_soon"
-          ? Math.max(10, Math.ceil(dailySalesAvg * 14 - item.stock))
-          : 0,
-      stock_status: stockStatus,
-    };
-  });
-
-  const inventoryRisks: InventoryRiskItem[] = inventoryStock
-    .filter((item) => item.stock_status === "stockout_risk" || item.stock_status === "reorder_soon")
-    .slice(0, 20)
-    .map((item) => ({
-      risk_id: `inventory_risk_${item.inventory_item_id}`,
-      product_uid: item.product_uid,
-      platform: SHOPEE_PLATFORM,
-      risk_type: item.stock_status,
-      risk_level: item.stock_status === "stockout_risk" ? "high" : "medium",
-      risk_reason:
-        item.stock_status === "stockout_risk"
-          ? "该商品已有真实订单记录，但当前库存读取为 0，需要人工确认是否断货。"
-          : "该商品可售天数偏低，需要人工确认补货节奏。",
-      suggested_action: "先核对 Shopee 后台库存与在途补货，再决定是否发起补货审批。",
-    }));
-
-  if (!hasStockSignal && agg.length > 0) {
-    inventoryRisks.unshift({
-      risk_id: "inventory_stock_detail_pending",
-      product_uid: agg[0]?.productUid ?? "shopee_inventory",
-      platform: SHOPEE_PLATFORM,
-      risk_type: "stock_detail_pending",
-      risk_level: "medium",
-      risk_reason: "已读取到真实商品和订单，但库存明细字段仍未完整返回。",
-      suggested_action: "继续补齐 Shopee 商品详情和库存明细读取权限，再用于断货判断。",
-    });
-  }
-
-  const reorderRecommendations: ReorderRecommendationItem[] = inventoryStock
-    .filter((item) => item.suggested_reorder_qty > 0)
-    .slice(0, 20)
-    .map((item) => ({
-      recommendation_id: `reorder_real_${item.product_uid}`,
-      product_uid: item.product_uid,
-      product_name: item.product_name,
-      platform: SHOPEE_PLATFORM,
-      current_stock: item.stock_qty,
-      daily_sales_avg: item.daily_sales_avg,
-      lead_time_days: 14,
-      recommended_reorder_qty: item.suggested_reorder_qty,
-      reorder_priority: item.stock_status === "stockout_risk" ? "P1" : "P2",
-      decision_notes: "仅生成补货建议，不会自动补货。",
-    }));
-
-  const totalInventoryValue = agg.reduce((sum, item) => sum + item.stock * item.price, 0);
-  const averageTurnover =
-    inventoryStock.length > 0
-      ? inventoryStock.reduce((sum, item) => sum + item.days_of_stock, 0) / inventoryStock.length
-      : 0;
-  const stockoutCount = inventoryStock.filter((item) => item.stock_status === "stockout_risk").length;
-  const overstockCount = inventoryStock.filter((item) => item.stock_status === "overstock_risk").length;
-  const slowMovingCount = inventoryStock.filter((item) => item.stock_status === "slow_moving").length;
-  const healthScore = !hasStockSignal && agg.length > 0 ? 40 : clamp(100 - stockoutCount * 8 - overstockCount * 4, 0, 100);
-
-  return {
-    source,
-    snapshot: {
-      inventory_snapshot_id: `inventory_real_shopee_${generatedAt.slice(0, 10)}`,
-      reporting_date: generatedAt.slice(0, 10),
-      market_code: "br",
-      total_inventory_value: totalInventoryValue,
-      inventory_turnover_days: Number(averageTurnover.toFixed(1)),
-      stock_health_score: healthScore,
-      stockout_risk_count: stockoutCount,
-      overstock_risk_count: overstockCount,
-      slow_moving_sku_count: slowMovingCount,
-    },
-    inventory_stock: inventoryStock,
-    inventory_risks: inventoryRisks,
-    reorder_recommendations: reorderRecommendations,
-  };
-}
-
-function buildOpportunities(
-  products: Product[],
-  agg: ProductAgg[],
-  inventory: InventoryApiResponse,
-  source: ShopeeDataSource,
-): OpportunitiesApiResponse {
-  const keywords: Keyword[] = [
-    {
-      keyword_uid: "kw_br_shopee_real_orders",
-      platform: SHOPEE_PLATFORM,
-      market_code: MARKET_CODE,
-      keyword: "Shopee 真实订单商品",
-      normalized_keyword: "shopee_real_orders",
-      category_hint: "Shopee BR",
-      search_volume_index: agg.reduce((sum, item) => sum + item.quantity, 0),
-      trend_direction: "flat",
-    },
-  ];
-
-  const marketScore: MarketScore[] = [
-    {
-      market_score_id: "market_real_shopee_orders",
-      keyword_uid: keywords[0].keyword_uid,
-      platform: SHOPEE_PLATFORM,
-      market_code: MARKET_CODE,
-      keyword: keywords[0].keyword ?? "Shopee 真实订单商品",
-      market_demand_score: clamp(50 + agg.length, 0, 100),
-      competition_score: 50,
-      trend_score: 55,
-      total_score: clamp(55 + agg.length, 0, 100),
-    },
-  ];
-
-  const opportunityScore: OpportunityScore[] = agg.slice(0, 50).map((item) => {
-    const score = clamp(55 + item.quantity * 4 + item.orderCount * 2 + item.revenue / 100, 35, 95);
-    const risk = inventory.inventory_risks.find((riskItem) => riskItem.product_uid === item.productUid);
-    const riskLevel: RiskLevel = risk?.risk_level ?? "low";
-    return {
-      opportunity_id: `opportunity_real_${item.productId}`,
-      product_uid: item.productUid,
-      keyword_uid: keywords[0].keyword_uid,
-      category_hint: "Shopee BR",
-      market_demand_score: marketScore[0].market_demand_score,
-      competition_score: marketScore[0].competition_score,
-      market_score: marketScore[0].total_score,
-      opportunity_score: Math.round(score),
-      recommendation_level: score >= 80 ? "A" : score >= 65 ? "B" : "C",
-      suggestion_level: score >= 80 ? "A" : score >= 65 ? "B" : "C",
-      decision_notes: "基于已授权店铺的真实订单和商品数据生成，建议人工复核标题、价格、库存和广告承接。",
-      risk_level: riskLevel,
-      risk_score: riskLevel === "high" ? 80 : riskLevel === "medium" ? 55 : 25,
-      reason: "该商品已出现在真实订单或真实商品清单中，可作为今天人工判断的候选项。",
-    };
-  });
-
-  const productMap = new Map(products.map((item) => [item.product_uid, item]));
-  const todayOpportunities: OpportunityProductItem[] = opportunityScore
-    .map((score) => {
-      const product = productMap.get(score.product_uid);
-      return {
-        product_uid: score.product_uid,
-        platform: SHOPEE_PLATFORM,
-        title_current: product?.title_current ?? score.product_uid,
-        price_amount: product?.price_amount ?? 0,
-        rating: product?.rating ?? 0,
-        sold_count_text: product?.sold_count_text ?? "-",
-        market_score: score.market_score,
-        opportunity_score: score.opportunity_score,
-        recommendation_level: score.recommendation_level ?? score.suggestion_level,
-        decision_notes: score.decision_notes ?? score.reason,
-        risk_level: score.risk_level,
-        risk_score: score.risk_score ?? 0,
-      };
-    })
-    .sort((left, right) => right.opportunity_score - left.opportunity_score);
-
-  const keywordOpportunities: KeywordOpportunityItem[] = marketScore.map((item) => ({
-    keyword_uid: item.keyword_uid,
-    keyword: item.keyword,
-    category_hint: "Shopee BR",
-    market_demand_score: item.market_demand_score,
-    competition_score: item.competition_score,
-    trend_score: item.trend_score,
-    total_score: item.total_score,
-    platform: SHOPEE_PLATFORM,
-  }));
-
-  const riskAlerts: OpportunityRiskAlert[] = inventory.inventory_risks.map((risk) => ({
-    risk_id: `opportunity_${risk.risk_id}`,
-    risk_type: risk.risk_type,
-    risk_level: risk.risk_level,
-    affected_product: productMap.get(risk.product_uid)?.title_current ?? risk.product_uid,
-    platform: SHOPEE_PLATFORM,
-    product_uid: risk.product_uid,
-    reason: risk.risk_reason,
-    suggested_action: risk.suggested_action,
-  }));
-
-  return {
-    source,
-    products,
-    keywords,
-    market_score: marketScore,
-    opportunity_score: opportunityScore,
-    today_opportunities: todayOpportunities,
-    keyword_opportunities: keywordOpportunities,
-    risk_alerts: riskAlerts,
-  };
-}
-
-function buildAnalysis(
-  opportunities: OpportunitiesApiResponse,
-  inventory: InventoryApiResponse,
-  source: ShopeeDataSource,
-): AnalysisApiResponse {
-  const opportunityAnalysis: OpportunityAnalysisItem[] = opportunities.today_opportunities.slice(0, 20).map((item) => ({
-    analysis_id: `analysis_real_${item.product_uid}`,
+function buildAnalysis(opportunities: OpportunitiesApiResponse, inventory: InventoryApiResponse): AnalysisApiResponse {
+  const opportunity_analysis: OpportunityAnalysisItem[] = opportunities.today_opportunities.slice(0, 10).map((item) => ({
+    analysis_id: uid("analysis", item.product_uid),
     product_uid: item.product_uid,
-    platform: "Shopee",
+    platform: PLATFORM,
     opportunity_score: item.opportunity_score,
     risk_level: item.risk_level,
-    analysis_summary: "真实订单/商品数据已进入分析范围。",
-    analysis_reason: "系统根据授权店铺读取到的订单、商品和库存字段生成初步经营判断。",
-    recommendation: "先由运营人工复核链接质量、库存承接和广告承接，再进入审批或执行队列。",
+    analysis_summary: "该商品已出现在真实订单中，具备继续观察或优化的价值。",
+    analysis_reason: "基于已授权店铺订单量、订单金额和商品信息生成。",
+    recommendation: "优先核对库存、成本和广告承接，再决定是否加大运营动作。",
   }));
 
-  const riskAnalysis: RiskAnalysisItem[] = inventory.inventory_risks.slice(0, 20).map((item) => ({
-    risk_id: `analysis_${item.risk_id}`,
-    risk_type: item.risk_type,
-    risk_level: item.risk_level,
-    product_uid: item.product_uid,
-    platform: "Shopee",
-    risk_reason: item.risk_reason,
-    mitigation_action: item.suggested_action,
+  const risk_analysis: RiskAnalysisItem[] = inventory.inventory_risks.slice(0, 10).map((risk) => ({
+    risk_id: risk.risk_id,
+    risk_type: risk.risk_type,
+    risk_level: risk.risk_level,
+    product_uid: risk.product_uid,
+    platform: PLATFORM,
+    risk_reason: risk.risk_reason,
+    mitigation_action: risk.suggested_action,
   }));
 
-  const aiRecommendations: AiRecommendationItem[] = opportunities.today_opportunities.slice(0, 10).map((item) => ({
-    recommendation_id: `recommendation_real_${item.product_uid}`,
-    recommendation_type: "real_data_review",
-    priority: item.risk_level === "high" ? "P1" : item.recommendation_level === "A" ? "P2" : "P3",
-    platform: "Shopee",
+  const market_analysis = opportunities.market_score.map((score) => ({
+    market_score_id: score.market_score_id,
+    platform: PLATFORM,
+    category: score.keyword,
+    demand_score: score.market_demand_score,
+    competition_score: score.competition_score,
+    trend_direction: "up" as const,
+  }));
+
+  const ai_recommendations: AiRecommendationItem[] = opportunity_analysis.slice(0, 5).map((item, index) => ({
+    recommendation_id: uid("ai_rec", `${item.product_uid}_${index}`),
+    recommendation_type: "运营建议",
+    priority: item.opportunity_score >= 82 ? "P1" : "P2",
+    platform: PLATFORM,
     product_uid: item.product_uid,
-    action_suggestion: "人工复核该商品的标题、价格、库存和广告承接。",
-    expected_impact: "减少人工翻表时间，优先处理已产生真实订单的商品。",
+    action_suggestion: item.recommendation,
+    expected_impact: "提升人工排查效率，避免没有库存或没有成本数据时盲目放量。",
   }));
 
   return {
-    source,
-    opportunity_analysis: opportunityAnalysis,
-    risk_analysis: riskAnalysis,
-    market_analysis: [
-      {
-        market_score_id: "market_analysis_shopee_real_orders",
-        platform: "Shopee",
-        category: "Shopee BR 已授权店铺",
-        demand_score: opportunities.market_score[0]?.market_demand_score ?? 0,
-        competition_score: opportunities.market_score[0]?.competition_score ?? 0,
-        trend_direction: "flat",
-      },
-    ],
-    ai_recommendations: aiRecommendations,
+    source: "shopee_api",
+    opportunity_analysis,
+    risk_analysis,
+    market_analysis,
+    ai_recommendations,
   };
 }
 
-function taskPriority(riskLevel: RiskLevel, score = 0) {
-  if (riskLevel === "high" || score >= 85) return "high" as const;
-  if (riskLevel === "medium" || score >= 65) return "medium" as const;
-  return "low" as const;
+function taskPriority(level: RiskLevel, score = 0): TaskPriority {
+  if (level === "high" || score >= 82) return "high";
+  if (level === "medium" || score >= 68) return "medium";
+  return "low";
+}
+
+function analysisPriority(priority: TaskPriority): AnalysisPriority {
+  if (priority === "high") return "P1";
+  if (priority === "medium") return "P2";
+  return "P3";
+}
+
+function taskRankValue(task: TodayTaskItem) {
+  const riskScore = task.risk_level === "high" ? 300 : task.risk_level === "medium" ? 150 : 50;
+  const priorityScore = task.priority === "high" ? 500 : task.priority === "medium" ? 250 : 100;
+  return priorityScore + riskScore + task.estimated_profit_impact + task.estimated_gmv_impact / 3 + task.estimated_inventory_impact * 20;
 }
 
 function buildTasks(
-  agg: ProductAgg[],
-  inventory: InventoryApiResponse,
+  aggs: ProductAgg[],
   opportunities: OpportunitiesApiResponse,
-  analysis: AnalysisApiResponse,
-  source: ShopeeDataSource,
+  inventory: InventoryApiResponse,
+  profit: ProfitApiResponse,
 ): TasksApiResponse {
   const tasks: TodayTaskItem[] = [];
 
-  for (const risk of inventory.inventory_risks.slice(0, 10)) {
-    const product = agg.find((item) => item.productUid === risk.product_uid);
+  for (const risk of inventory.inventory_risks.slice(0, 5)) {
+    const stock = inventory.inventory_stock.find((item) => item.product_uid === risk.product_uid);
+    const priority = taskPriority(risk.risk_level);
     tasks.push({
-      task_id: `task_${risk.risk_id}`,
-      task_title: risk.risk_type === "stock_detail_pending" ? "补全 Shopee 库存明细读取" : "核对库存风险商品",
+      task_id: uid("task_inventory", risk.product_uid),
+      task_title: `${risk.risk_type}: ${stock?.product_name || risk.product_uid}`,
       task_type: "inventory_alert",
       source_module: "inventory",
       impact_type: "inventory",
-      title: risk.risk_type === "stock_detail_pending" ? "补全 Shopee 库存明细读取" : "核对库存风险商品",
+      title: `${risk.risk_type}: ${stock?.product_name || risk.product_uid}`,
       summary: risk.risk_reason,
       product_uid: risk.product_uid,
-      platform: "Shopee",
-      estimated_profit_impact: product?.revenue ?? 0,
-      estimated_gmv_impact: product?.revenue ?? 0,
-      estimated_inventory_impact: product?.quantity ?? 0,
-      priority: taskPriority(risk.risk_level),
+      platform: PLATFORM,
+      estimated_profit_impact: 0,
+      estimated_gmv_impact: 0,
+      estimated_inventory_impact: stock?.stock_qty || 0,
+      priority,
       risk_level: risk.risk_level,
-      expected_impact: "避免库存字段不完整导致运营误判。",
+      expected_impact: "减少断货或压货导致的运营损失。",
       suggested_action: risk.suggested_action,
       created_at: nowIso(),
       href: "/inventory",
     });
   }
 
-  for (const opportunity of opportunities.today_opportunities.slice(0, 10)) {
-    const product = agg.find((item) => item.productUid === opportunity.product_uid);
+  for (const item of opportunities.today_opportunities.slice(0, 5)) {
+    const priority = taskPriority(item.risk_level, item.opportunity_score);
+    const agg = aggs.find((entry) => productUid(entry.productId) === item.product_uid);
     tasks.push({
-      task_id: `task_opportunity_${opportunity.product_uid}`,
-      task_title: "复核真实订单商品机会",
+      task_id: uid("task_opportunity", item.product_uid),
+      task_title: `跟进真实成交商品: ${item.title_current}`,
       task_type: "opportunity_follow_up",
       source_module: "opportunity",
       impact_type: "gmv",
-      title: "复核真实订单商品机会",
-      summary: opportunity.decision_notes,
-      product_uid: opportunity.product_uid,
-      platform: "Shopee",
+      title: `跟进真实成交商品: ${item.title_current}`,
+      summary: item.decision_notes,
+      product_uid: item.product_uid,
+      platform: PLATFORM,
       estimated_profit_impact: 0,
-      estimated_gmv_impact: product?.revenue ?? opportunity.price_amount,
-      estimated_inventory_impact: product?.quantity ?? 0,
-      priority: taskPriority(opportunity.risk_level, opportunity.opportunity_score),
-      risk_level: opportunity.risk_level,
-      expected_impact: "优先处理已经产生真实订单或高机会分的商品。",
-      suggested_action: "检查链接标题、价格、主图、库存和广告承接，确认是否进入审批。",
+      estimated_gmv_impact: round(agg?.revenue || 0),
+      estimated_inventory_impact: 0,
+      priority,
+      risk_level: item.risk_level,
+      expected_impact: "优先处理已经产生真实订单的商品。",
+      suggested_action: "核对商品链接、库存、成本和广告承接，不自动执行平台操作。",
       created_at: nowIso(),
       href: "/opportunities",
     });
   }
 
-  for (const recommendation of analysis.ai_recommendations.slice(0, 5)) {
+  if (profit.product_profit.length > 0) {
     tasks.push({
-      task_id: `task_analysis_${recommendation.recommendation_id}`,
-      task_title: "处理数据分析建议",
-      task_type: "analysis_review",
-      source_module: "analysis",
-      impact_type: "risk",
-      title: "处理数据分析建议",
-      summary: recommendation.action_suggestion,
-      product_uid: recommendation.product_uid,
-      platform: recommendation.platform,
+      task_id: "task_profit_cost_confirmation",
+      task_title: "补齐已成交商品的成本和广告数据",
+      task_type: "profit_alert",
+      source_module: "profit",
+      impact_type: "profit",
+      title: "补齐已成交商品的成本和广告数据",
+      summary: "系统已经读取到真实订单，但采购、物流、佣金、广告成本仍未接入，利润暂不能作为最终判断。",
+      platform: PLATFORM,
       estimated_profit_impact: 0,
-      estimated_gmv_impact: 0,
+      estimated_gmv_impact: profit.snapshot.cash_flow,
       estimated_inventory_impact: 0,
-      priority: recommendation.priority === "P1" ? "high" : recommendation.priority === "P2" ? "medium" : "low",
-      risk_level: recommendation.priority === "P1" ? "high" : recommendation.priority === "P2" ? "medium" : "low",
-      expected_impact: recommendation.expected_impact,
-      suggested_action: recommendation.action_suggestion,
+      priority: "high",
+      risk_level: "medium",
+      expected_impact: "补齐成本后才能判断哪些商品真正赚钱。",
+      suggested_action: "先导入或接入成本、广告和佣金数据，再生成利润动作。",
       created_at: nowIso(),
-      href: "/analysis",
+      href: "/profit",
     });
   }
 
-  const uniqueTasks = [...new Map(tasks.map((item) => [item.task_id, item])).values()].sort((left, right) => {
-    const priorityDelta = riskRank(right.risk_level) - riskRank(left.risk_level);
-    if (priorityDelta !== 0) return priorityDelta;
-    return right.estimated_gmv_impact - left.estimated_gmv_impact;
-  });
-
-  const topTasks: TopTaskItem[] = uniqueTasks.slice(0, 5).map((task, index) => ({ ...task, rank: index + 1 }));
-  const highTasks = uniqueTasks.filter((task) => task.priority === "high");
-  const mediumTasks = uniqueTasks.filter((task) => task.priority === "medium");
-  const lowTasks = uniqueTasks.filter((task) => task.priority === "low");
-  const estimatedProfitImpact = uniqueTasks.reduce((sum, task) => sum + task.estimated_profit_impact, 0);
-  const estimatedGmvImpact = uniqueTasks.reduce((sum, task) => sum + task.estimated_gmv_impact, 0);
-  const estimatedInventoryImpact = uniqueTasks.reduce((sum, task) => sum + task.estimated_inventory_impact, 0);
+  const allTasks = tasks.sort((a, b) => taskRankValue(b) - taskRankValue(a));
+  const top_tasks = allTasks.slice(0, 5).map((task, index) => ({ ...task, rank: index + 1 }));
+  const high = allTasks.filter((task) => task.priority === "high");
+  const medium = allTasks.filter((task) => task.priority === "medium");
+  const low = allTasks.filter((task) => task.priority === "low");
 
   return {
-    source,
+    source: "shopee_api",
     overview: {
-      total_tasks: uniqueTasks.length,
-      high_priority_tasks: highTasks.length,
-      medium_priority_tasks: mediumTasks.length,
-      low_priority_tasks: lowTasks.length,
-      estimated_profit_impact: estimatedProfitImpact,
-      estimated_gmv_impact: estimatedGmvImpact,
-      estimated_inventory_impact: estimatedInventoryImpact,
+      total_tasks: allTasks.length,
+      high_priority_tasks: high.length,
+      medium_priority_tasks: medium.length,
+      low_priority_tasks: low.length,
+      estimated_profit_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_profit_impact, 0)),
+      estimated_gmv_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_gmv_impact, 0)),
+      estimated_inventory_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_inventory_impact, 0)),
     },
-    top_tasks: topTasks,
-    high_priority_tasks: highTasks,
-    medium_priority_tasks: mediumTasks,
-    low_priority_tasks: lowTasks,
-    all_tasks: uniqueTasks,
-    ai_recommendations: analysis.ai_recommendations.map((item) => ({
-      recommendation_id: item.recommendation_id,
-      recommendation_type: item.recommendation_type,
-      recommendation_summary: item.action_suggestion,
-      recommendation_reason: "来自真实 Shopee 店铺数据的规则分析。",
-      expected_benefit: item.expected_impact,
+    top_tasks,
+    high_priority_tasks: high,
+    medium_priority_tasks: medium,
+    low_priority_tasks: low,
+    all_tasks: allTasks,
+    ai_recommendations: allTasks.slice(0, 5).map((task) => ({
+      recommendation_id: uid("task_ai", task.task_id),
+      recommendation_type: task.task_type,
+      recommendation_summary: task.title,
+      recommendation_reason: task.summary,
+      expected_benefit: task.expected_impact,
       approval_required: true,
-      priority: item.priority,
-      href: "/analysis",
+      priority: analysisPriority(task.priority),
+      href: task.href,
     })),
     source_stats: {
-      inventory_tasks: uniqueTasks.filter((item) => item.source_module === "inventory").length,
-      profit_tasks: uniqueTasks.filter((item) => item.source_module === "profit").length,
-      approval_tasks: uniqueTasks.filter((item) => item.source_module === "approval").length,
-      analysis_tasks: uniqueTasks.filter((item) => item.source_module === "analysis").length,
-      opportunity_tasks: uniqueTasks.filter((item) => item.source_module === "opportunity").length,
+      inventory_tasks: allTasks.filter((task) => task.source_module === "inventory").length,
+      profit_tasks: allTasks.filter((task) => task.source_module === "profit").length,
+      approval_tasks: 0,
+      analysis_tasks: allTasks.filter((task) => task.source_module === "analysis").length,
+      opportunity_tasks: allTasks.filter((task) => task.source_module === "opportunity").length,
     },
     impact_stats: {
-      total_profit_impact: estimatedProfitImpact,
-      total_gmv_impact: estimatedGmvImpact,
-      total_inventory_impact: estimatedInventoryImpact,
+      total_profit_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_profit_impact, 0)),
+      total_gmv_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_gmv_impact, 0)),
+      total_inventory_impact: round(allTasks.reduce((sum, task) => sum + task.estimated_inventory_impact, 0)),
     },
   };
 }
 
-function buildDashboard(
-  products: Product[],
-  agg: ProductAgg[],
-  profit: ProfitApiResponse,
-  inventory: InventoryApiResponse,
-  opportunities: OpportunitiesApiResponse,
-  analysis: AnalysisApiResponse,
-  tasks: TasksApiResponse,
-  generatedAt: string,
-  source: ShopeeDataSource,
-  fallbackGmv = 0,
-): DashboardSummaryApiResponse {
-  const productGmv = agg.reduce((sum, item) => sum + item.revenue, 0);
-  const totalGmv = productGmv > 0 ? productGmv : fallbackGmv;
-  const highRiskCount =
-    inventory.inventory_risks.filter((item) => item.risk_level === "high").length +
-    opportunities.risk_alerts.filter((item) => item.risk_level === "high").length;
+function metric(metric_id: string, label: string, value: number, unit: DashboardMetric["unit"], note: string, tone: DashboardMetric["tone"]): DashboardMetric {
+  return { metric_id, label, value, unit, note, tone };
+}
 
-  const dashboardSummary: DashboardSummary = {
-    reporting_date: generatedAt.slice(0, 10),
-    market_code: "br",
+function buildDashboard(
+  aggs: ProductAgg[],
+  products: Product[],
+  opportunities: OpportunitiesApiResponse,
+  inventory: InventoryApiResponse,
+  profit: ProfitApiResponse,
+  tasks: TasksApiResponse,
+  analysis: AnalysisApiResponse,
+): DashboardSummaryApiResponse {
+  const gmv = totalRevenue(aggs);
+  const highRisk = inventory.inventory_risks.filter((risk) => risk.risk_level === "high").length;
+  const lowProfit = profit.profit_risk.low_profit_products;
+  const generatedAt = nowIso();
+
+  const profitRiskSummary = profit.profit_risk;
+  const dashboard_summary: DashboardSummary = {
+    reporting_date: todayDate(),
+    market_code: MARKET_CODE,
     core_metrics: {
       yesterday_net_profit: 0,
       month_net_profit: 0,
       net_margin: 0,
-      cash_flow: totalGmv,
+      cash_flow: gmv,
       inventory_turnover_days: inventory.snapshot.inventory_turnover_days,
       pending_approval_count: 0,
     },
     operating_status: {
       today_opportunity_count: opportunities.today_opportunities.length,
-      high_priority_recommendation_count: analysis.ai_recommendations.filter((item) => item.priority === "P1").length,
+      high_priority_recommendation_count: tasks.overview.high_priority_tasks,
       stockout_risk_count: inventory.snapshot.stockout_risk_count,
-      low_profit_product_count: profit.product_profit.filter((item) => item.net_margin < 0.12 && item.revenue > 0).length,
-      high_risk_alert_count: highRiskCount,
+      low_profit_product_count: lowProfit,
+      high_risk_alert_count: highRisk,
     },
     profit_and_cash: {
       yesterday_net_profit: 0,
       month_net_profit: 0,
       net_margin: 0,
-      cash_flow: totalGmv,
-      profit_risk_summary: profit.profit_risk,
+      cash_flow: gmv,
+      profit_risk_summary: profitRiskSummary,
     },
     inventory_risk: {
       inventory_turnover_days: inventory.snapshot.inventory_turnover_days,
@@ -752,13 +829,13 @@ function buildDashboard(
       total_profit_impact: 0,
       decision_success_rate: 0,
       roi_prediction_error: 0,
-      best_strategy: "等待决策复盘数据",
-      worst_strategy: "等待决策复盘数据",
+      best_strategy: "真实订单已接入，下一步需要补齐成本、广告和库存详情。",
+      worst_strategy: "不要在缺少成本和库存详情时自动放量。",
     },
     self_optimization: {
       rule_hit_rate: 0,
       rule_bias_rate: 0,
-      recommendation_count: 0,
+      recommendation_count: analysis.ai_recommendations.length,
       top_recommendations: [],
       learning_trend: [],
     },
@@ -769,9 +846,9 @@ function buildDashboard(
       latest_recommendations: [],
     },
     opportunity_and_risk: {
-      top_opportunities: opportunities.today_opportunities.slice(0, 4).map((item) => ({
+      top_opportunities: opportunities.today_opportunities.slice(0, 5).map((item) => ({
         product_uid: item.product_uid,
-        platform: item.platform,
+        platform: PLATFORM,
         title_current: item.title_current,
         price_amount: item.price_amount,
         opportunity_score: item.opportunity_score,
@@ -779,128 +856,135 @@ function buildDashboard(
         recommendation_level: item.recommendation_level,
         decision_notes: item.decision_notes,
       })),
-      top_risks: [
-        ...inventory.inventory_risks.map((item) => ({
-          risk_id: item.risk_id,
-          source: "inventory" as const,
-          risk_type: item.risk_type,
-          risk_level: item.risk_level,
-          product_uid: item.product_uid,
-          product_name: products.find((product) => product.product_uid === item.product_uid)?.title_current ?? item.product_uid,
-          platform: item.platform,
-          summary: item.risk_reason,
-          suggested_action: item.suggested_action,
-        })),
-        ...opportunities.risk_alerts.map((item) => ({
-          risk_id: item.risk_id,
-          source: "opportunity" as const,
-          risk_type: item.risk_type,
-          risk_level: item.risk_level,
-          product_uid: item.product_uid,
-          product_name: item.affected_product,
-          platform: item.platform,
-          summary: item.reason,
-          suggested_action: item.suggested_action,
-        })),
-      ]
-        .sort((left, right) => riskRank(right.risk_level) - riskRank(left.risk_level))
-        .slice(0, 4),
-      recommended_actions: analysis.ai_recommendations.slice(0, 4).map((item) => ({
-        action_id: item.recommendation_id,
+      top_risks: inventory.inventory_risks.slice(0, 5).map((risk) => ({
+        risk_id: risk.risk_id,
+        source: "inventory",
+        risk_type: risk.risk_type,
+        risk_level: risk.risk_level,
+        product_uid: risk.product_uid,
+        product_name: products.find((product) => product.product_uid === risk.product_uid)?.title_current || risk.product_uid,
+        platform: PLATFORM,
+        summary: risk.risk_reason,
+        suggested_action: risk.suggested_action,
+      })),
+      recommended_actions: analysis.ai_recommendations.slice(0, 5).map((item) => ({
+        action_id: uid("dashboard_action", item.recommendation_id),
         recommendation_type: item.recommendation_type,
         priority: item.priority,
-        platform: item.platform,
+        platform: PLATFORM,
         product_uid: item.product_uid,
-        product_name: products.find((product) => product.product_uid === item.product_uid)?.title_current ?? item.product_uid,
+        product_name: products.find((product) => product.product_uid === item.product_uid)?.title_current || item.product_uid,
         action_suggestion: item.action_suggestion,
         expected_impact: item.expected_impact,
       })),
     },
     system_status: {
-      data_source: source,
+      data_source: "shopee_api",
       last_updated_at: generatedAt,
       api_status: "healthy",
       database_status: "connected",
     },
   };
 
-  const crawlLogs: CrawlLog[] = [
+  const crawl_logs: CrawlLog[] = [
     {
-      crawl_run_id: `shopee_real_read_${generatedAt}`,
-      platform: "Shopee",
-      market_code: "br",
+      crawl_run_id: uid("shopee_sync", generatedAt),
+      platform: PLATFORM,
+      market_code: MARKET_CODE,
       started_at: generatedAt,
       finished_at: generatedAt,
       status: "success",
-      records_seen: products.length,
-      records_inserted: products.length,
-      message: "Shopee 只读接口已读取真实订单、商品和库存数据。",
+      records_seen: aggs.length,
+      records_inserted: aggs.length,
+      message: "已读取授权店铺订单、商品和库存只读数据。",
     },
   ];
 
-  const reports: DataQualityReport[] = [
+  const data_quality_report: DataQualityReport[] = [
     {
-      report_id: "shopee_real_data_quality",
-      report_date: generatedAt,
+      report_id: uid("quality", "shopee_real_data"),
+      report_date: todayDate(),
       source_table: "shopee_readonly",
-      check_name: "real_store_data",
-      severity: source === "shopee_api" ? "low" : "medium",
-      quality_status: source === "shopee_api" ? "pass" : "warning",
-      details: source === "shopee_api" ? "已读取授权店铺真实数据。" : "当前未直接返回 Shopee API 数据。",
+      check_name: "真实店铺数据接入",
+      severity: aggs.length > 0 ? "low" : "medium",
+      quality_status: aggs.length > 0 ? "pass" : "warning",
+      details: aggs.length > 0 ? "已读取真实店铺数据。" : "尚未读取到真实店铺数据。",
     },
   ];
 
   return {
-    source,
+    source: "shopee_api",
     products,
     action_queue: [],
-    crawl_logs: crawlLogs,
-    data_quality_report: reports,
-    dashboard_summary: dashboardSummary,
+    crawl_logs,
+    data_quality_report,
+    dashboard_summary,
+    dashboard_snapshot: {
+      reporting_date: todayDate(),
+      market_code: MARKET_CODE,
+      bossMetrics: [
+        metric("gmv", "今日销售", gmv, "currency", "来自真实订单金额", "good"),
+        metric("profit", "今日利润", 0, "currency", "成本和广告未接入，暂不估算净利润", "warn"),
+        metric("inventory", "库存健康度", inventory.snapshot.stock_health_score, "count", "来自库存只读数据", "neutral"),
+        metric("tasks", "待处理事项", tasks.overview.total_tasks, "count", "来自真实数据生成的运营事项", "warn"),
+      ],
+      riskCenter: inventory.inventory_risks.slice(0, 5).map<DashboardRisk>((risk) => ({
+        risk_id: risk.risk_id,
+        title: risk.risk_type,
+        level: risk.risk_level,
+        signal: risk.product_uid,
+        note: risk.risk_reason,
+      })),
+      operationSafety: [metric("orders", "订单数量", aggs.reduce((sum, item) => sum + item.orderCount, 0), "count", "来自授权店铺订单", "good")],
+      trafficFunnel: [],
+      adsCenter: [metric("ads", "广告数据", 0, "count", "广告权限尚未接入", "warn")],
+      inventoryCenter: [metric("stock_health", "库存健康度", inventory.snapshot.stock_health_score, "count", "来自库存只读数据", "neutral")],
+      watchlist: opportunities.today_opportunities.slice(0, 5).map((item) => ({
+        watch_id: uid("watch", item.product_uid),
+        product_uid: item.product_uid,
+        focus_metric: "真实订单",
+        focus_value: item.sold_count_text,
+        risk_level: item.risk_level,
+        next_action: item.decision_notes,
+      })),
+    },
   };
 }
 
-function buildDailyOps(
-  tasks: TasksApiResponse,
-  inventory: InventoryApiResponse,
-  opportunities: OpportunitiesApiResponse,
-  generatedAt: string,
-  source: ShopeeDataSource,
-  fallbackGmv = 0,
-): DailyOpsApiResponse {
-  const coreGoals = tasks.top_tasks.slice(0, 3).map((task) => ({
-    goal_id: `daily_${task.task_id}`,
-    rank: task.rank,
-    title: task.task_title,
-    source: task.source_module === "opportunity" ? ("decision_engine" as const) : ("tasks" as const),
-    profit_impact: task.estimated_profit_impact,
-    risk_level: task.risk_level,
-    priority: task.priority,
-    reason: task.summary,
-    href: task.href,
+function buildDailyOps(tasks: TasksApiResponse, inventory: InventoryApiResponse, opportunities: OpportunitiesApiResponse, profit: ProfitApiResponse): DailyOpsApiResponse {
+  const topRisks = inventory.inventory_risks.slice(0, 5).map((risk) => ({
+    risk_id: risk.risk_id,
+    risk_type: risk.risk_type,
+    risk_level: risk.risk_level,
+    title: risk.risk_type,
+    source: "库存中心",
+    suggested_action: risk.suggested_action,
+    href: "/inventory",
   }));
 
   return {
-    source,
-    generated_at: generatedAt,
-    core_goals: coreGoals,
+    source: "shopee_api",
+    generated_at: nowIso(),
+    core_goals: tasks.top_tasks.slice(0, 3).map((task) => ({
+      goal_id: uid("daily_goal", task.task_id),
+      rank: task.rank,
+      title: task.title,
+      source: "tasks",
+      profit_impact: task.estimated_profit_impact,
+      risk_level: task.risk_level,
+      priority: task.priority,
+      reason: task.summary,
+      href: task.href,
+    })),
     risk_overview: {
       stockout_risk_count: inventory.snapshot.stockout_risk_count,
-      profit_decline_risk_count: 0,
-      high_risk_product_count: inventory.inventory_risks.filter((item) => item.risk_level === "high").length,
+      profit_decline_risk_count: profit.profit_risk.low_profit_products,
+      high_risk_product_count: inventory.inventory_risks.filter((risk) => risk.risk_level === "high").length,
       approval_backlog_count: 0,
-      top_risks: inventory.inventory_risks.slice(0, 5).map((item) => ({
-        risk_id: item.risk_id,
-        risk_type: item.risk_type,
-        risk_level: item.risk_level,
-        title: item.risk_reason,
-        source: "库存中心",
-        suggested_action: item.suggested_action,
-        href: "/inventory",
-      })),
+      top_risks: topRisks,
     },
     opportunities: opportunities.today_opportunities.slice(0, 5).map((item) => ({
-      opportunity_id: `daily_opportunity_${item.product_uid}`,
+      opportunity_id: uid("daily_opp", item.product_uid),
       opportunity_type: "test_product",
       title: item.title_current,
       source: "decision_engine",
@@ -918,12 +1002,16 @@ function buildDailyOps(
       queue_items: [],
     },
     metrics: {
-      expected_gmv: Math.max(tasks.impact_stats.total_gmv_impact, fallbackGmv),
-      expected_profit: tasks.impact_stats.total_profit_impact,
+      expected_gmv: profit.snapshot.cash_flow,
+      expected_profit: 0,
       stock_health_score: inventory.snapshot.stock_health_score,
       decision_success_rate: 0,
     },
-    guardrails: ["仅使用 Shopee 授权店铺真实只读数据生成运营视图，不自动改价、不上架、不补货。"],
+    guardrails: [
+      "所有建议只展示，不自动改价、不自动上架、不自动发货。",
+      "利润判断需要补齐采购、物流、佣金和广告成本。",
+      "广告、联盟和活动建议需要对应 Shopee 权限后再生成。",
+    ],
   };
 }
 
@@ -934,55 +1022,41 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
     getShopeeInventory(),
   ]);
 
-  const orders = (ordersResponse.data as RealOrder[]).map(normalizeOrder);
-  const productsRaw = productsResponse.data as RealProduct[];
-  const inventoryRaw = inventoryResponse.data as RealInventoryItem[];
+  const hasRealData = [ordersResponse, productsResponse, inventoryResponse].some(
+    (response) => response.source === "shopee_api" && response.data.length > 0,
+  );
+  if (!hasRealData) return null;
 
-  if (orders.length === 0 && productsRaw.length === 0 && inventoryRaw.length === 0) {
-    return null;
-  }
+  const orders = ordersResponse.data.map(normalizeOrder).filter((item) => item.order_id || item.product_id);
+  const rawProducts = productsResponse.data.map(normalizeProduct).filter((item) => item.product_id);
+  const rawInventory = inventoryResponse.data.map(normalizeInventory).filter((item) => item.product_id);
+  const shopId = inferShopIdFromData(orders, rawProducts, rawInventory);
+  const aggregations = buildAggregations(orders, rawProducts, rawInventory);
+  if (aggregations.length === 0) return null;
 
-  const generatedAt = nowIso();
-  const syncedAt = latest([
-    ordersResponse.synced_at ?? "",
-    productsResponse.synced_at ?? "",
-    inventoryResponse.synced_at ?? "",
-    ordersResponse.timestamp,
-    productsResponse.timestamp,
-    inventoryResponse.timestamp,
-  ]) ?? generatedAt;
-  const source =
-    ordersResponse.source === "shopee_api" ||
-    productsResponse.source === "shopee_api" ||
-    inventoryResponse.source === "shopee_api"
-      ? "shopee_api"
-      : ordersResponse.source;
-
-  const productAgg = aggregateProducts(orders, productsRaw, inventoryRaw);
-  const orderRevenue = totalOrderRevenue(orders);
-  const products = buildProducts(productAgg, generatedAt);
-  const inventory = buildInventory(productAgg, generatedAt, source);
-  const profit = buildProfit(productAgg, inventory.snapshot, generatedAt, source, orderRevenue);
-  const opportunities = buildOpportunities(products, productAgg, inventory, source);
-  const analysis = buildAnalysis(opportunities, inventory, source);
-  const tasks = buildTasks(productAgg, inventory, opportunities, analysis, source);
-  const dashboard = buildDashboard(products, productAgg, profit, inventory, opportunities, analysis, tasks, generatedAt, source, orderRevenue);
-  const dailyOps = buildDailyOps(tasks, inventory, opportunities, generatedAt, source, orderRevenue);
+  const products = buildProducts(aggregations, shopId);
+  const inventory = buildInventory(aggregations, hasMeaningfulStockData(rawInventory, rawProducts));
+  const profit = buildProfit(aggregations, inventory);
+  const opportunities = buildOpportunities(aggregations, products, inventory.inventory_risks);
+  const analysis = buildAnalysis(opportunities, inventory);
+  const tasks = buildTasks(aggregations, opportunities, inventory, profit);
+  const dashboard = buildDashboard(aggregations, products, opportunities, inventory, profit, tasks, analysis);
+  const dailyOps = buildDailyOps(tasks, inventory, opportunities, profit);
 
   return {
-    source,
-    generatedAt,
-    syncedAt,
+    source: "shopee_api",
+    generatedAt: nowIso(),
+    shopId,
     orders,
-    productsRaw,
-    inventoryRaw,
-    productAgg,
+    rawProducts,
+    rawInventory,
+    aggregations,
     products,
-    profit,
-    inventory,
     opportunities,
     analysis,
     tasks,
+    profit,
+    inventory,
     dashboard,
     dailyOps,
   };
@@ -991,14 +1065,13 @@ async function createBundle(): Promise<RealShopeeBusinessBundle | null> {
 export async function getRealShopeeBusinessBundle() {
   const now = Date.now();
   if (cachedBundle && cachedBundle.expiresAt > now) return cachedBundle.value;
-  try {
-    const value = await createBundle();
-    cachedBundle = { value, expiresAt: now + CACHE_TTL_MS };
-    return value;
-  } catch {
-    cachedBundle = { value: null, expiresAt: now + 5_000 };
-    return null;
-  }
+  const value = await createBundle();
+  cachedBundle = { value, expiresAt: now + CACHE_TTL_MS };
+  return value;
+}
+
+export function clearRealShopeeBusinessCache() {
+  cachedBundle = null;
 }
 
 export async function getRealShopeeProductsResponse() {
