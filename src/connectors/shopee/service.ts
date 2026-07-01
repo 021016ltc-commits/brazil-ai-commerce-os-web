@@ -22,6 +22,12 @@ type RemoteShopeePayload = {
   inventory: ShopeeInventoryItem[];
 };
 
+type RemotePageInfo = {
+  more: boolean;
+  nextCursor: string;
+  nextOffset: number | null;
+};
+
 function shouldUseMockData() {
   return isMockDataAllowed() && process.env.DATA_SOURCE_MODE?.trim().toLowerCase() === "mock";
 }
@@ -60,6 +66,10 @@ function firstNumber(values: unknown[], fallback = 0) {
 
 function valueOf<T extends Record<string, unknown>>(value: T, key: string) {
   return value[key];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
 function cleanText(value: unknown) {
@@ -129,15 +139,76 @@ function extractArray<T>(payload: unknown, key: string): T[] {
   return [];
 }
 
-async function fetchRemoteEndpoint<T>(path: string, key: string): Promise<T[]> {
+function remoteMaxSyncItems() {
+  const configured = Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? process.env.SHOPEE_FULL_SYNC_MAX_ITEMS ?? 10000);
+  return Math.max(50, Math.min(50000, Number.isFinite(configured) ? configured : 10000));
+}
+
+function remotePageSize(maxItems: number) {
+  const configured = Number(process.env.SHOPEE_PAGE_SIZE ?? 50);
+  return Math.max(10, Math.min(100, Number.isFinite(configured) ? configured : Math.min(50, maxItems)));
+}
+
+function readPaginationInfo(payload: unknown, currentOffset: number, pageSize: number): RemotePageInfo {
+  const records = [
+    asRecord(payload),
+    asRecord(asRecord(payload).response),
+    asRecord(asRecord(payload).pagination),
+    asRecord(asRecord(payload).meta),
+  ];
+
+  const more = records.some((record) =>
+    Boolean(record.more ?? record.has_next_page ?? record.has_next ?? record.has_more ?? record.next_page),
+  );
+
+  const nextCursor =
+    records
+      .map((record) => record.next_cursor ?? record.nextCursor ?? record.cursor_next)
+      .find((value) => String(value ?? "").trim()) ?? "";
+
+  const nextOffsetValue = records
+    .map((record) => record.next_offset ?? record.nextOffset)
+    .find((value) => Number.isFinite(Number(value)));
+
+  return {
+    more,
+    nextCursor: String(nextCursor || "").trim(),
+    nextOffset:
+      nextOffsetValue === undefined || nextOffsetValue === null
+        ? null
+        : Math.max(currentOffset + pageSize, Number(nextOffsetValue)),
+  };
+}
+
+function uniqueRemoteKey(value: unknown, preferredKey: string) {
+  const record = asRecord(value);
+  const keys = [
+    preferredKey,
+    "order_id",
+    "order_sn",
+    "product_id",
+    "item_id",
+    "model_id",
+    "sku",
+  ];
+  for (const key of keys) {
+    const candidate = String(record[key] ?? "").trim();
+    if (candidate) return candidate;
+  }
+  return JSON.stringify(record);
+}
+
+async function fetchRemotePage<T>(path: string, key: string, params: Record<string, string | number>): Promise<{
+  items: T[];
+  pageInfo: RemotePageInfo;
+}> {
   const baseUrl = process.env.SHOPEE_READONLY_API_BASE_URL?.trim();
   if (!baseUrl) throw new Error("Shopee read-only API base URL is not configured.");
 
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  const maxItems = Math.max(50, Math.min(1000, Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? 200) || 200));
-  if (!url.searchParams.has("limit")) url.searchParams.set("limit", String(maxItems));
-  if (!url.searchParams.has("max")) url.searchParams.set("max", String(maxItems));
-  if (!url.searchParams.has("page_size")) url.searchParams.set("page_size", String(Math.min(100, maxItems)));
+  Object.entries(params).forEach(([paramKey, value]) => {
+    if (String(value) !== "") url.searchParams.set(paramKey, String(value));
+  });
   const headers: HeadersInit = {
     Accept: "application/json",
   };
@@ -157,21 +228,82 @@ async function fetchRemoteEndpoint<T>(path: string, key: string): Promise<T[]> {
     throw new Error(`Shopee read-only endpoint ${path} returned ${response.status}.`);
   }
 
-  return extractArray<T>(await response.json(), key);
+  const payload = await response.json();
+  const items = extractArray<T>(payload, key);
+  return {
+    items,
+    pageInfo: readPaginationInfo(payload, Number(params.offset ?? 0), Number(params.page_size ?? 50)),
+  };
+}
+
+async function fetchRemoteEndpoint<T>(path: string, key: string, preferredKey: string): Promise<T[]> {
+  const maxItems = remoteMaxSyncItems();
+  const pageSize = remotePageSize(maxItems);
+  const maxPages = Math.max(1, Math.min(1000, Math.ceil(maxItems / pageSize) + 5));
+  const items: T[] = [];
+  const seen = new Set<string>();
+  let cursor = "";
+  let offset = 0;
+
+  for (let page = 0; page < maxPages && items.length < maxItems; page += 1) {
+    const { items: pageItems, pageInfo } = await fetchRemotePage<T>(path, key, {
+      all: 1,
+      full: 1,
+      limit: maxItems,
+      max: maxItems,
+      page_size: pageSize,
+      offset,
+      cursor,
+    });
+
+    let addedThisPage = 0;
+    for (const item of pageItems) {
+      const uniqueKey = uniqueRemoteKey(item, preferredKey);
+      if (seen.has(uniqueKey)) continue;
+      seen.add(uniqueKey);
+      items.push(item);
+      addedThisPage += 1;
+      if (items.length >= maxItems) break;
+    }
+
+    if (items.length >= maxItems) break;
+
+    if (pageInfo.nextCursor && pageInfo.nextCursor !== cursor) {
+      cursor = pageInfo.nextCursor;
+      offset = 0;
+      continue;
+    }
+
+    if (pageInfo.nextOffset !== null && pageInfo.nextOffset > offset) {
+      offset = pageInfo.nextOffset;
+      cursor = "";
+      continue;
+    }
+
+    if ((pageInfo.more || pageItems.length >= pageSize) && addedThisPage > 0) {
+      offset += pageItems.length || pageSize;
+      cursor = "";
+      continue;
+    }
+
+    break;
+  }
+
+  return items;
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders");
+  const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id");
   return orders.map(normalizeOrder).filter((item) => item.order_id);
 }
 
 async function fetchRemoteProducts(): Promise<ShopeeProduct[]> {
-  const products = await fetchRemoteEndpoint<Partial<ShopeeProduct>>("products", "products");
+  const products = await fetchRemoteEndpoint<Partial<ShopeeProduct>>("products", "products", "product_id");
   return products.map(normalizeProduct).filter((item) => item.product_id);
 }
 
 async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
-  const inventory = await fetchRemoteEndpoint<Partial<ShopeeInventoryItem>>("inventory", "inventory");
+  const inventory = await fetchRemoteEndpoint<Partial<ShopeeInventoryItem>>("inventory", "inventory", "product_id");
   return inventory.map(normalizeInventory).filter((item) => item.product_id);
 }
 
