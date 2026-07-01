@@ -13,7 +13,7 @@ import {
 } from "@/lib/connectors/shopeeProxyClient";
 import { logApiError } from "@/lib/errorHandler";
 import { tenantIdFromRequest, withTenant } from "@/lib/tenantContext";
-import type { ShopeeBindingPublicStatus, ShopeeBindingReadiness } from "@/types";
+import type { PlatformShopBindingPublicItem, ShopeeBindingPublicStatus, ShopeeBindingReadiness } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,6 +123,62 @@ function mergeBindingStatuses(
   };
 }
 
+function asPublicString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizePublicStatus(value: unknown): ShopeeBindingPublicStatus["status"] {
+  const status = asPublicString(value);
+  if (status === "bound" || status === "expired" || status === "error" || status === "unbound") return status;
+  return "unbound";
+}
+
+function sanitizePublicShop(value: unknown, index: number): PlatformShopBindingPublicItem | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const shopId = asPublicString(raw.shop_id);
+  if (!shopId) return null;
+  const updatedAt = asPublicString(raw.updated_at) ?? asPublicString(raw.last_sync_at) ?? new Date().toISOString();
+
+  return {
+    binding_id: asPublicString(raw.binding_id) ?? `shopee_binding_${shopId}_${index}`,
+    platform: "Shopee",
+    platform_label: "Shopee",
+    shop_id: shopId,
+    shop_name: asPublicString(raw.shop_name),
+    region: asPublicString(raw.region) ?? "BR",
+    owner_name: asPublicString(raw.owner_name),
+    notes: asPublicString(raw.notes),
+    status: normalizePublicStatus(raw.status),
+    bound_at: asPublicString(raw.bound_at) ?? updatedAt,
+    updated_at: updatedAt,
+    last_sync_at: asPublicString(raw.last_sync_at),
+    token_expire_at: asPublicString(raw.token_expire_at),
+    readonly: true,
+  };
+}
+
+function sanitizePublicBindingStatus(binding: ShopeeBindingPublicStatus): ShopeeBindingPublicStatus {
+  const shops = (Array.isArray(binding.shops) ? binding.shops : [])
+    .map((shop, index) => sanitizePublicShop(shop, index))
+    .filter((shop): shop is PlatformShopBindingPublicItem => Boolean(shop));
+  const firstShop = shops[0];
+
+  return {
+    configured: Boolean(binding.configured),
+    bound: Boolean(binding.bound),
+    status: normalizePublicStatus(binding.status),
+    shop_id: asPublicString(binding.shop_id) ?? firstShop?.shop_id ?? null,
+    shop_name: asPublicString(binding.shop_name) ?? firstShop?.shop_name ?? null,
+    region: asPublicString(binding.region) ?? firstShop?.region ?? null,
+    token_expire_at: asPublicString(binding.token_expire_at) ?? firstShop?.token_expire_at ?? null,
+    last_sync_at: asPublicString(binding.last_sync_at) ?? firstShop?.last_sync_at ?? null,
+    auth_url: asPublicString(binding.auth_url),
+    message: asPublicString(binding.message) ?? "",
+    shops,
+  };
+}
+
 export async function GET(request: Request) {
   const tenantId = tenantIdFromRequest(request);
   const origin = new URL(request.url).origin;
@@ -146,10 +202,12 @@ export async function GET(request: Request) {
       }
     });
 
+    const safeResult = sanitizePublicBindingStatus(result);
+
     return NextResponse.json({
       tenant_id: tenantId,
-      ...result,
-      readiness: buildReadiness({ origin, binding: result, proxyHealth }),
+      ...safeResult,
+      readiness: buildReadiness({ origin, binding: safeResult, proxyHealth }),
     });
   } catch (error) {
     logApiError("/api/shopee/binding", error);
@@ -201,10 +259,12 @@ export async function PATCH(request: Request) {
       return getShopeeBindingStatus("/api/shopee/auth/start");
     });
 
+    const safeResult = sanitizePublicBindingStatus(result);
+
     return NextResponse.json({
       tenant_id: tenantId,
-      ...result,
-      readiness: buildReadiness({ origin, binding: result, proxyHealth }),
+      ...safeResult,
+      readiness: buildReadiness({ origin, binding: safeResult, proxyHealth }),
     });
   } catch (error) {
     logApiError("/api/shopee/binding", error);

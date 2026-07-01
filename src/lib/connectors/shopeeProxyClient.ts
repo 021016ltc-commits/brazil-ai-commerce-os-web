@@ -1,4 +1,4 @@
-import type { ShopeeBindingPublicStatus } from "@/types";
+import type { PlatformShopBindingPublicItem, ShopeeBindingPublicStatus } from "@/types";
 
 type ProxyJson = Record<string, unknown>;
 
@@ -162,33 +162,65 @@ export async function updateShopeeProxyShopBindingProfile(input: {
 }
 
 function normalizeProxyBindingStatus(payload: ProxyJson, authUrl: string): ShopeeBindingPublicStatus {
-  const shops = Array.isArray(payload.shops) ? payload.shops : [];
-  const firstShop = shops[0] as Record<string, unknown> | undefined;
-  const status = String(payload.status || firstShop?.status || (shops.length ? "bound" : "unbound"));
+  const rawShops = Array.isArray(payload.shops) ? payload.shops : [];
+  const shops = rawShops
+    .map((shop, index) => sanitizeProxyShop(shop, index))
+    .filter((shop): shop is PlatformShopBindingPublicItem => Boolean(shop));
+  const payloadShop = sanitizeProxyShop(payload, shops.length);
+  if (!shops.length && payloadShop) shops.push(payloadShop);
+
+  const firstShop = shops[0];
+  const status = normalizeBindingStatus(payload.status || firstShop?.status || (shops.length ? "bound" : "unbound"));
 
   return {
     configured: true,
     bound: Boolean(payload.bound ?? shops.length > 0),
-    status: status as ShopeeBindingPublicStatus["status"],
-    shop_id: typeof payload.shop_id === "string" ? payload.shop_id : typeof firstShop?.shop_id === "string" ? firstShop.shop_id : null,
-    shop_name:
-      typeof payload.shop_name === "string" ? payload.shop_name : typeof firstShop?.shop_name === "string" ? firstShop.shop_name : null,
-    region: typeof payload.region === "string" ? payload.region : typeof firstShop?.region === "string" ? firstShop.region : null,
-    token_expire_at:
-      typeof payload.token_expire_at === "string"
-        ? payload.token_expire_at
-        : typeof firstShop?.token_expire_at === "string"
-          ? firstShop.token_expire_at
-          : null,
-    last_sync_at:
-      typeof payload.last_sync_at === "string"
-        ? payload.last_sync_at
-        : typeof firstShop?.last_sync_at === "string"
-          ? firstShop.last_sync_at
-          : null,
+    status,
+    shop_id: asString(payload.shop_id) ?? firstShop?.shop_id ?? null,
+    shop_name: asString(payload.shop_name) ?? firstShop?.shop_name ?? null,
+    region: asString(payload.region) ?? firstShop?.region ?? null,
+    token_expire_at: asString(payload.token_expire_at) ?? firstShop?.token_expire_at ?? null,
+    last_sync_at: asString(payload.last_sync_at) ?? firstShop?.last_sync_at ?? null,
     auth_url: authUrl,
     message: String(payload.message || (shops.length ? "已通过固定 IP 代理绑定店铺。" : "可通过固定 IP 代理授权店铺。")),
-    shops: shops as ShopeeBindingPublicStatus["shops"],
+    shops,
+  };
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeBindingStatus(value: unknown): ShopeeBindingPublicStatus["status"] {
+  const status = asString(value);
+  if (status === "bound" || status === "expired" || status === "error" || status === "unbound") return status;
+  return "unbound";
+}
+
+function sanitizeProxyShop(value: unknown, index: number): PlatformShopBindingPublicItem | null {
+  if (!value || typeof value !== "object") return null;
+
+  const raw = value as Record<string, unknown>;
+  const shopId = asString(raw.shop_id);
+  if (!shopId) return null;
+
+  const updatedAt = asString(raw.updated_at) ?? asString(raw.last_sync_at) ?? new Date().toISOString();
+
+  return {
+    binding_id: asString(raw.binding_id) ?? `shopee_proxy_binding_${shopId}_${index}`,
+    platform: "Shopee",
+    platform_label: "Shopee",
+    shop_id: shopId,
+    shop_name: asString(raw.shop_name),
+    region: asString(raw.region) ?? "BR",
+    owner_name: asString(raw.owner_name),
+    notes: asString(raw.notes),
+    status: normalizeBindingStatus(raw.status),
+    bound_at: asString(raw.bound_at) ?? updatedAt,
+    updated_at: updatedAt,
+    last_sync_at: asString(raw.last_sync_at),
+    token_expire_at: asString(raw.token_expire_at),
+    readonly: true,
   };
 }
 

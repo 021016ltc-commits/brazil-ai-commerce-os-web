@@ -139,6 +139,11 @@ function extractArray<T>(payload: unknown, key: string): T[] {
   return [];
 }
 
+function remoteFastReadItems() {
+  const configured = Number(process.env.SHOPEE_FAST_READ_ITEMS ?? process.env.SHOPEE_READ_MAX_ITEMS ?? 200);
+  return Math.max(50, Math.min(1000, Number.isFinite(configured) ? configured : 200));
+}
+
 function remoteMaxSyncItems() {
   const configured = Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? process.env.SHOPEE_FULL_SYNC_MAX_ITEMS ?? 10000);
   return Math.max(50, Math.min(50000, Number.isFinite(configured) ? configured : 10000));
@@ -147,6 +152,11 @@ function remoteMaxSyncItems() {
 function remotePageSize(maxItems: number) {
   const configured = Number(process.env.SHOPEE_PAGE_SIZE ?? 50);
   return Math.max(10, Math.min(100, Number.isFinite(configured) ? configured : Math.min(50, maxItems)));
+}
+
+function remoteFetchTimeoutMs() {
+  const configured = Number(process.env.SHOPEE_READ_TIMEOUT_MS ?? 12_000);
+  return Math.max(3000, Math.min(25_000, Number.isFinite(configured) ? configured : 12_000));
 }
 
 function readPaginationInfo(payload: unknown, currentOffset: number, pageSize: number): RemotePageInfo {
@@ -227,11 +237,20 @@ async function fetchRemoteJson(path: string, params: Record<string, string | num
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remoteFetchTimeoutMs());
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`Shopee read-only endpoint ${path} returned ${response.status}.`);
@@ -240,8 +259,13 @@ async function fetchRemoteJson(path: string, params: Record<string, string | num
   return response.json();
 }
 
-async function fetchRemoteEndpoint<T>(path: string, key: string, preferredKey: string): Promise<T[]> {
-  const maxItems = remoteMaxSyncItems();
+async function fetchRemoteEndpoint<T>(
+  path: string,
+  key: string,
+  preferredKey: string,
+  options: { full?: boolean } = {},
+): Promise<T[]> {
+  const maxItems = options.full ? remoteMaxSyncItems() : remoteFastReadItems();
   const pageSize = remotePageSize(maxItems);
   const maxPages = Math.max(1, Math.min(1000, Math.ceil(maxItems / pageSize) + 5));
   const items: T[] = [];
@@ -251,8 +275,7 @@ async function fetchRemoteEndpoint<T>(path: string, key: string, preferredKey: s
 
   for (let page = 0; page < maxPages && items.length < maxItems; page += 1) {
     const { items: pageItems, pageInfo } = await fetchRemotePage<T>(path, key, {
-      all: 1,
-      full: 1,
+      ...(options.full ? { all: 1, full: 1 } : {}),
       limit: maxItems,
       max: maxItems,
       page_size: pageSize,
@@ -311,6 +334,21 @@ async function fetchRemoteInventory(): Promise<ShopeeInventoryItem[]> {
   return inventory.map(normalizeInventory).filter((item) => item.product_id);
 }
 
+async function fetchRemoteOrdersFull(): Promise<ShopeeOrder[]> {
+  const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", { full: true });
+  return orders.map(normalizeOrder).filter((item) => item.order_id);
+}
+
+async function fetchRemoteProductsFull(): Promise<ShopeeProduct[]> {
+  const products = await fetchRemoteEndpoint<Partial<ShopeeProduct>>("products", "products", "product_id", { full: true });
+  return products.map(normalizeProduct).filter((item) => item.product_id);
+}
+
+async function fetchRemoteInventoryFull(): Promise<ShopeeInventoryItem[]> {
+  const inventory = await fetchRemoteEndpoint<Partial<ShopeeInventoryItem>>("inventory", "inventory", "product_id", { full: true });
+  return inventory.map(normalizeInventory).filter((item) => item.product_id);
+}
+
 async function fetchRemoteShopeeBundle(): Promise<RemoteShopeePayload> {
   const maxItems = remoteMaxSyncItems();
   const pageSize = remotePageSize(maxItems);
@@ -338,9 +376,9 @@ async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
   }
 
   const [orders, products, inventory] = await Promise.all([
-    fetchRemoteOrders().catch(() => []),
-    fetchRemoteProducts().catch(() => []),
-    fetchRemoteInventory().catch(() => []),
+    fetchRemoteOrdersFull().catch(() => []),
+    fetchRemoteProductsFull().catch(() => []),
+    fetchRemoteInventoryFull().catch(() => []),
   ]);
 
   return { orders, products, inventory };
