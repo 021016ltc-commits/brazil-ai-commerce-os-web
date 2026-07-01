@@ -339,16 +339,20 @@ async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
   let orders: Partial<ShopeeOrder>[] = [];
 
   try {
-    orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
-      maxItems: remoteOrderFastReadItems(),
-    });
+    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 12_000 });
+    orders = extractArray<Partial<ShopeeOrder>>(payload, "orders");
   } catch {
     orders = [];
   }
 
   if (orders.length === 0) {
-    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 12_000 });
-    orders = extractArray<Partial<ShopeeOrder>>(payload, "orders");
+    try {
+      orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
+        maxItems: remoteOrderFastReadItems(),
+      });
+    } catch {
+      orders = [];
+    }
   }
 
   return orders.map(normalizeOrder).filter((item) => item.order_id);
