@@ -63,13 +63,15 @@ function valueOf<T extends Record<string, unknown>>(value: T, key: string) {
 }
 
 function cleanText(value: unknown) {
-  const text = String(value ?? "").trim();
-  if (!/[ÃÂ]/.test(text)) return text;
-  try {
-    return Buffer.from(text, "latin1").toString("utf8");
-  } catch {
-    return text;
+  let text = String(value ?? "").trim();
+  for (let attempt = 0; attempt < 2 && /[\u00c2\u00c3]/.test(text); attempt += 1) {
+    try {
+      text = Buffer.from(text, "latin1").toString("utf8");
+    } catch {
+      break;
+    }
   }
+  return text;
 }
 
 function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): ShopeeOrder {
