@@ -268,7 +268,7 @@ async function fetchRemoteEndpoint<T>(
   path: string,
   key: string,
   preferredKey: string,
-  options: { full?: boolean; maxItems?: number } = {},
+  options: { full?: boolean; maxItems?: number; refresh?: boolean } = {},
 ): Promise<T[]> {
   const maxItems = options.maxItems ?? (options.full ? remoteMaxSyncItems() : remoteFastReadItems());
   const pageSize = remotePageSize(maxItems);
@@ -281,6 +281,7 @@ async function fetchRemoteEndpoint<T>(
   for (let page = 0; page < maxPages && items.length < maxItems; page += 1) {
     const { items: pageItems, pageInfo } = await fetchRemotePage<T>(path, key, {
       ...(options.full ? { all: 1, full: 1 } : {}),
+      ...(options.refresh ? { refresh: 1 } : {}),
       limit: maxItems,
       max: maxItems,
       page_size: pageSize,
@@ -327,6 +328,7 @@ async function fetchRemoteEndpoint<T>(
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
   const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
     maxItems: remoteOrderFastReadItems(),
+    refresh: true,
   });
   return orders.map(normalizeOrder).filter((item) => item.order_id);
 }
@@ -563,6 +565,16 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
     return { source: "mock", data: shopeeOrdersMock, synced_at: null, readonly: true };
   }
 
+  if (shopeeApiConfigured()) {
+    try {
+      const orders = await fetchRemoteOrders();
+      const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
+      return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
+    } catch {
+      // Fall through to direct API fallback, then SQLite cache.
+    }
+  }
+
   if (!shouldUseMockData()) {
     try {
       const official = await fetchOfficialShopeeReadOnlyData();
@@ -570,16 +582,6 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
         const syncedAt = await writeShopeeCacheBestEffort(official);
         return { source: "shopee_api", data: official.orders, synced_at: syncedAt, readonly: true };
       }
-    } catch {
-      // Fall through to proxy, then SQLite cache.
-    }
-  }
-
-  if (!shouldUseMockData() && shopeeApiConfigured()) {
-    try {
-      const orders = await fetchRemoteOrders();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
-      return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
     } catch {
       // Fall through to SQLite cache, then mock.
     }
@@ -598,6 +600,16 @@ export async function getShopeeProductsResponse(): Promise<ShopeeReadOnlyApiResp
     return { source: "mock", data: shopeeProductsMock, synced_at: null, readonly: true };
   }
 
+  if (shopeeApiConfigured()) {
+    try {
+      const products = await fetchRemoteProducts();
+      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products, inventory: [] });
+      return { source: "shopee_api", data: products, synced_at: syncedAt, readonly: true };
+    } catch {
+      // Fall through to direct API fallback, then SQLite cache.
+    }
+  }
+
   if (!shouldUseMockData()) {
     try {
       const official = await fetchOfficialShopeeReadOnlyData();
@@ -605,16 +617,6 @@ export async function getShopeeProductsResponse(): Promise<ShopeeReadOnlyApiResp
         const syncedAt = await writeShopeeCacheBestEffort(official);
         return { source: "shopee_api", data: official.products, synced_at: syncedAt, readonly: true };
       }
-    } catch {
-      // Fall through to proxy, then SQLite cache.
-    }
-  }
-
-  if (!shouldUseMockData() && shopeeApiConfigured()) {
-    try {
-      const products = await fetchRemoteProducts();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products, inventory: [] });
-      return { source: "shopee_api", data: products, synced_at: syncedAt, readonly: true };
     } catch {
       // Fall through to SQLite cache, then mock.
     }
@@ -633,6 +635,16 @@ export async function getShopeeInventoryResponse(): Promise<ShopeeReadOnlyApiRes
     return { source: "mock", data: shopeeInventoryMock, synced_at: null, readonly: true };
   }
 
+  if (shopeeApiConfigured()) {
+    try {
+      const inventory = await fetchRemoteInventory();
+      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products: [], inventory });
+      return { source: "shopee_api", data: inventory, synced_at: syncedAt, readonly: true };
+    } catch {
+      // Fall through to direct API fallback, then SQLite cache.
+    }
+  }
+
   if (!shouldUseMockData()) {
     try {
       const official = await fetchOfficialShopeeReadOnlyData();
@@ -640,16 +652,6 @@ export async function getShopeeInventoryResponse(): Promise<ShopeeReadOnlyApiRes
         const syncedAt = await writeShopeeCacheBestEffort(official);
         return { source: "shopee_api", data: official.inventory, synced_at: syncedAt, readonly: true };
       }
-    } catch {
-      // Fall through to proxy, then SQLite cache.
-    }
-  }
-
-  if (!shouldUseMockData() && shopeeApiConfigured()) {
-    try {
-      const inventory = await fetchRemoteInventory();
-      const syncedAt = await writeShopeeCacheBestEffort({ orders: [], products: [], inventory });
-      return { source: "shopee_api", data: inventory, synced_at: syncedAt, readonly: true };
     } catch {
       // Fall through to SQLite cache, then mock.
     }
