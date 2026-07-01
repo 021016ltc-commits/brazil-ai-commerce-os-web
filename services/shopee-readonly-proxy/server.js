@@ -123,14 +123,53 @@ function signedUrl(pathname, query = {}, binding = null) {
 }
 
 async function fetchJson(url, init) {
-  const response = await fetch(url, { ...init, cache: "no-store" });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    const error = new Error(String(payload.error || payload.message || `Shopee returned ${response.status}`));
-    error.payload = payload;
+  const target = url instanceof URL ? url : new URL(String(url));
+  const requestOptions = init || {};
+  const body = requestOptions.body || "";
+  const headers = Object.assign({}, requestOptions.headers || {});
+  if (body && !headers["Content-Length"]) headers["Content-Length"] = Buffer.byteLength(body);
+
+  const result = await new Promise((resolve, reject) => {
+    const client = target.protocol === "http:" ? http : https;
+    const req = client.request(
+      target,
+      {
+        method: requestOptions.method || "GET",
+        headers,
+      },
+      (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          raw += chunk;
+        });
+        res.on("end", () => {
+          let payload = {};
+          if (raw) {
+            try {
+              payload = JSON.parse(raw);
+            } catch {
+              payload = { message: raw };
+            }
+          }
+          resolve({ status: res.statusCode || 0, payload });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(45000, () => {
+      req.destroy(new Error("Shopee request timed out."));
+    });
+    if (body) req.write(body);
+    req.end();
+  });
+
+  if (result.status < 200 || result.status >= 300 || result.payload.error) {
+    const error = new Error(String(result.payload.error || result.payload.message || `Shopee returned ${result.status}`));
+    error.payload = result.payload;
     throw error;
   }
-  return payload;
+  return result.payload;
 }
 
 async function shopeeGet(pathname, query, binding) {
