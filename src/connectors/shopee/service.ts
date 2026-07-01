@@ -3,6 +3,7 @@ import { fetchOfficialShopeeReadOnlyData } from "@/lib/connectors/shopeeOfficial
 import { isMockDataAllowed } from "@/lib/runtime/config";
 import { withDatabase } from "@/lib/sqlite";
 import { currentTenantId } from "@/lib/tenantContext";
+import { Buffer } from "node:buffer";
 import type {
   ShopeeDataSource,
   ShopeeInventoryItem,
