@@ -19,7 +19,15 @@ const ORDER_HISTORY_DAYS = Math.max(
 );
 const MAX_SYNC_ITEMS = Math.max(50, Math.min(50000, Number(process.env.SHOPEE_FULL_SYNC_MAX_ITEMS || process.env.SHOPEE_MAX_SYNC_ITEMS || 10000)));
 const PAGE_SIZE = Math.max(10, Math.min(100, Number(process.env.SHOPEE_PAGE_SIZE || 50)));
-const SERVICE_VERSION = "2026-07-01.full-pagination-token-refresh-v3";
+const SNAPSHOT_MAX_AGE_MS = Math.max(60 * 1000, Number(process.env.SHOPEE_SNAPSHOT_MAX_AGE_MS || 5 * 60 * 1000));
+const SNAPSHOT_FILES = {
+  orders: path.join(DATA_DIR, "orders-snapshot.json"),
+  products: path.join(DATA_DIR, "products-snapshot.json"),
+  inventory: path.join(DATA_DIR, "inventory-snapshot.json"),
+};
+const SYNC_STATE_FILE = path.join(DATA_DIR, "sync-state.json");
+const SERVICE_VERSION = "2026-07-01.snapshot-sync-v1";
+let syncJob = null;
 
 function nowIso() {
   return new Date().toISOString();
@@ -33,17 +41,33 @@ function ensureDataDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function readBindings() {
+function readJsonFile(filePath, fallback) {
   try {
-    return JSON.parse(fs.readFileSync(BINDING_FILE, "utf8"));
-  } catch {
-    return [];
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    return fallback;
   }
 }
 
-function writeBindings(bindings) {
+function writeJsonFile(filePath, payload) {
   ensureDataDir();
-  fs.writeFileSync(BINDING_FILE, JSON.stringify(bindings, null, 2));
+  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+}
+
+function cleanText(value) {
+  return String(value == null ? "" : value)
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function readBindings() {
+  const bindings = readJsonFile(BINDING_FILE, []);
+  return Array.isArray(bindings) ? bindings : [];
+}
+
+function writeBindings(bindings) {
+  writeJsonFile(BINDING_FILE, bindings);
 }
 
 function firstBinding() {
@@ -64,6 +88,126 @@ function saveBinding(binding) {
   else bindings.unshift({ created_at: nowIso(), ...next });
   writeBindings(bindings);
   return next;
+}
+
+function publicBinding(binding) {
+  if (!binding) return null;
+  return {
+    shop_id: String(binding.shop_id || ""),
+    shop_name: cleanText(binding.shop_name || ""),
+    owner_name: cleanText(binding.owner_name || ""),
+    region: binding.region || "BR",
+    status: binding.status || "bound",
+    notes: cleanText(binding.notes || ""),
+    created_at: binding.created_at || null,
+    updated_at: binding.updated_at || null,
+    last_sync_at: binding.last_sync_at || null,
+    token_expire_at: binding.token_expire_at || null,
+  };
+}
+
+function publicBindings() {
+  return readBindings().map(publicBinding).filter(Boolean);
+}
+
+function readSnapshot(kind) {
+  const filePath = SNAPSHOT_FILES[kind];
+  if (!filePath) return null;
+  const snapshot = readJsonFile(filePath, null);
+  if (!snapshot || !Array.isArray(snapshot.items)) return null;
+  return snapshot;
+}
+
+function writeSnapshot(kind, items, meta) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const snapshot = {
+    kind,
+    source: "shopee_api",
+    items: safeItems,
+    count: safeItems.length,
+    created_at: nowIso(),
+    meta: meta || {},
+  };
+  writeJsonFile(SNAPSHOT_FILES[kind], snapshot);
+  return snapshot;
+}
+
+function defaultSyncState() {
+  return {
+    status: "idle",
+    running: Boolean(syncJob),
+    started_at: null,
+    completed_at: null,
+    updated_at: null,
+    message: "No full sync has run yet.",
+    error: null,
+    orders_count: 0,
+    products_count: 0,
+    inventory_count: 0,
+  };
+}
+
+function readSyncState() {
+  const state = readJsonFile(SYNC_STATE_FILE, null);
+  return Object.assign(defaultSyncState(), state || {}, { running: Boolean(syncJob) });
+}
+
+function writeSyncState(patch) {
+  const next = Object.assign({}, readSyncState(), patch || {}, { updated_at: nowIso(), running: Boolean(syncJob) });
+  writeJsonFile(SYNC_STATE_FILE, next);
+  return next;
+}
+
+function snapshotCounts() {
+  const orders = readSnapshot("orders");
+  const products = readSnapshot("products");
+  const inventory = readSnapshot("inventory");
+  return {
+    orders_count: orders ? orders.count || orders.items.length : 0,
+    products_count: products ? products.count || products.items.length : 0,
+    inventory_count: inventory ? inventory.count || inventory.items.length : 0,
+    orders_synced_at: orders ? orders.created_at : null,
+    products_synced_at: products ? products.created_at : null,
+    inventory_synced_at: inventory ? inventory.created_at : null,
+  };
+}
+
+function snapshotAgeMs(kind) {
+  const snapshot = readSnapshot(kind);
+  if (!snapshot || !snapshot.created_at) return Number.POSITIVE_INFINITY;
+  const createdAt = Date.parse(snapshot.created_at);
+  if (!Number.isFinite(createdAt)) return Number.POSITIVE_INFINITY;
+  return Date.now() - createdAt;
+}
+
+function shouldRefreshSnapshots() {
+  return !readSnapshot("orders")
+    || !readSnapshot("products")
+    || !readSnapshot("inventory")
+    || snapshotAgeMs("orders") > SNAPSHOT_MAX_AGE_MS
+    || snapshotAgeMs("products") > SNAPSHOT_MAX_AGE_MS
+    || snapshotAgeMs("inventory") > SNAPSHOT_MAX_AGE_MS;
+}
+
+function readBundleSnapshot() {
+  const ordersSnapshot = readSnapshot("orders");
+  const productsSnapshot = readSnapshot("products");
+  const inventorySnapshot = readSnapshot("inventory");
+  const counts = snapshotCounts();
+  const syncedAt = counts.orders_synced_at || counts.products_synced_at || counts.inventory_synced_at || null;
+  return {
+    source: syncedAt ? "shopee_snapshot" : "shopee_api",
+    orders: ordersSnapshot ? ordersSnapshot.items : [],
+    products: productsSnapshot ? productsSnapshot.items : [],
+    inventory: inventorySnapshot ? inventorySnapshot.items : [],
+    orders_count: counts.orders_count,
+    products_count: counts.products_count,
+    inventory_count: counts.inventory_count,
+    synced_at: syncedAt,
+    snapshot: true,
+    sync_state: readSyncState(),
+    readonly: true,
+  };
 }
 
 function json(res, status, payload) {
@@ -218,7 +362,7 @@ function priceFromItem(item) {
 function normalizeProduct(item) {
   return {
     product_id: String(item.item_id || item.product_id || ""),
-    title: String(item.item_name || item.title || item.name || ""),
+    title: cleanText(item.item_name || item.title || item.name || ""),
     price: priceFromItem(item),
     stock: stockFromItem(item),
     sales_count: firstNumber([item.historical_sold, item.sold, item.sales_count]),
@@ -244,7 +388,7 @@ function normalizeOrderLines(order) {
   return itemList.map((item) => ({
     order_id: orderId,
     product_id: String(item.item_id || item.product_id || ""),
-    sku: String(item.item_sku || item.model_sku || item.sku || ""),
+    sku: cleanText(item.item_sku || item.model_sku || item.sku || ""),
     quantity: Math.max(1, firstNumber([item.model_quantity_purchased, item.item_quantity, item.quantity], 1)),
     price: firstNumber([item.model_discounted_price, item.model_original_price, item.item_price, order.total_amount]),
     order_status: status,
@@ -286,14 +430,29 @@ async function activeBinding() {
   return ensureFreshBinding(binding);
 }
 
-async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns) {
+function numberOption(value, fallback, min, max) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(min, Math.min(max, numberValue));
+}
+
+function boolParam(value) {
+  const text = String(value || "").toLowerCase();
+  return text === "1" || text === "true" || text === "yes";
+}
+
+async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns, options) {
+  const config = options || {};
+  const maxItems = numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
+  const pageSize = numberOption(config.pageSize, PAGE_SIZE, 1, PAGE_SIZE);
   let cursor = "";
-  while (orderSns.length < MAX_SYNC_ITEMS) {
+  while (orderSns.length < maxItems) {
+    const remaining = Math.max(1, maxItems - orderSns.length);
     const payload = await shopeeGet("/api/v2/order/get_order_list", {
       time_range_field: "create_time",
       time_from: timeFrom,
       time_to: timeTo,
-      page_size: PAGE_SIZE,
+      page_size: Math.min(pageSize, remaining),
       cursor,
     }, binding);
     const list = nestedArray(payload, "order_list");
@@ -306,41 +465,52 @@ async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns) {
   }
 }
 
-async function fetchOrders(binding) {
+async function fetchOrders(binding, options) {
+  const config = options || {};
+  const maxItems = numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
+  const historyDays = numberOption(config.historyDays, ORDER_HISTORY_DAYS, 1, ORDER_HISTORY_DAYS);
+  const windowDays = numberOption(config.windowDays, ORDER_WINDOW_DAYS, 1, ORDER_WINDOW_DAYS);
   const now = nowSeconds();
-  const historyFrom = now - ORDER_HISTORY_DAYS * 24 * 60 * 60;
+  const historyFrom = now - historyDays * 24 * 60 * 60;
   const orderSns = [];
   let windowTo = now;
 
-  while (windowTo > historyFrom && orderSns.length < MAX_SYNC_ITEMS) {
-    const windowFrom = Math.max(historyFrom, windowTo - ORDER_WINDOW_DAYS * 24 * 60 * 60 + 1);
-    await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns);
+  while (windowTo > historyFrom && orderSns.length < maxItems) {
+    const windowFrom = Math.max(historyFrom, windowTo - windowDays * 24 * 60 * 60 + 1);
+    await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns, { maxItems, pageSize: config.pageSize });
     windowTo = windowFrom - 1;
   }
 
-  const uniqueOrderSns = Array.from(new Set(orderSns)).slice(0, MAX_SYNC_ITEMS);
+  const uniqueOrderSns = Array.from(new Set(orderSns)).slice(0, maxItems);
   if (!uniqueOrderSns.length) return [];
 
-  const detailPayloads = await Promise.all(chunk(uniqueOrderSns, 50).map((orderChunk) =>
-    shopeeGet("/api/v2/order/get_order_detail", {
+  const orderDetails = [];
+  const orderChunks = chunk(uniqueOrderSns, 50);
+  for (let index = 0; index < orderChunks.length; index += 1) {
+    const orderChunk = orderChunks[index];
+    const payload = await shopeeGet("/api/v2/order/get_order_detail", {
       order_sn_list: orderChunk.join(","),
       response_optional_fields: "item_list,total_amount,order_status,create_time,pay_time,update_time",
-    }, binding)
-  ));
+    }, binding);
+    orderDetails.push(...nestedArray(payload, "order_list"));
+  }
 
-  return detailPayloads
-    .flatMap((payload) => nestedArray(payload, "order_list"))
+  return orderDetails
     .flatMap(normalizeOrderLines)
     .filter((item) => item.order_id);
 }
 
-async function fetchProducts(binding) {
+async function fetchProducts(binding, options) {
+  const config = options || {};
+  const maxItems = numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
+  const pageSize = numberOption(config.pageSize, PAGE_SIZE, 1, PAGE_SIZE);
   const itemIds = [];
   let offset = 0;
-  while (itemIds.length < MAX_SYNC_ITEMS) {
+  while (itemIds.length < maxItems) {
+    const remaining = Math.max(1, maxItems - itemIds.length);
     const payload = await shopeeGet("/api/v2/product/get_item_list", {
       offset,
-      page_size: PAGE_SIZE,
+      page_size: Math.min(pageSize, remaining),
       item_status: "NORMAL",
     }, binding);
     const list = nestedArray(payload, "item");
@@ -352,20 +522,23 @@ async function fetchProducts(binding) {
     offset = nextOffset;
   }
 
-  const uniqueItemIds = Array.from(new Set(itemIds)).slice(0, MAX_SYNC_ITEMS);
+  const uniqueItemIds = Array.from(new Set(itemIds)).slice(0, maxItems);
   if (!uniqueItemIds.length) return [];
 
-  const detailPayloads = await Promise.all(chunk(uniqueItemIds, 50).map((itemChunk) =>
-    shopeeGet("/api/v2/product/get_item_base_info", {
+  const productDetails = [];
+  const itemChunks = chunk(uniqueItemIds, 50);
+  for (let index = 0; index < itemChunks.length; index += 1) {
+    const itemChunk = itemChunks[index];
+    const payload = await shopeeGet("/api/v2/product/get_item_base_info", {
       item_id_list: itemChunk.join(","),
       response_optional_fields: "price_info,stock_info_v2,sales_info,item_name,item_sku,item_status,description,brand",
       need_tax_info: "false",
       need_complaint_policy: "false",
-    }, binding)
-  ));
+    }, binding);
+    productDetails.push(...nestedArray(payload, "item_list"));
+  }
 
-  return detailPayloads
-    .flatMap((payload) => nestedArray(payload, "item_list"))
+  return productDetails
     .map(normalizeProduct)
     .filter((item) => item.product_id);
 }
@@ -376,6 +549,101 @@ function inventoryFromProducts(products) {
     available_stock: product.stock,
     reserved_stock: 0,
   }));
+}
+
+async function refreshProductsAndInventory(binding) {
+  const products = await fetchProducts(binding, { maxItems: MAX_SYNC_ITEMS, pageSize: PAGE_SIZE });
+  const inventory = inventoryFromProducts(products);
+  writeSnapshot("products", products, { shop_id: String(binding.shop_id || "") });
+  writeSnapshot("inventory", inventory, { shop_id: String(binding.shop_id || "") });
+  return { products, inventory };
+}
+
+async function refreshOrders(binding, options) {
+  const config = options || {};
+  const orders = await fetchOrders(binding, {
+    maxItems: numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS),
+    historyDays: numberOption(config.historyDays, ORDER_HISTORY_DAYS, 1, ORDER_HISTORY_DAYS),
+    windowDays: ORDER_WINDOW_DAYS,
+    pageSize: PAGE_SIZE,
+  });
+  writeSnapshot("orders", orders, { shop_id: String(binding.shop_id || "") });
+  return orders;
+}
+
+async function runFullSync(reason) {
+  const startedAt = nowIso();
+  writeSyncState({
+    status: "running",
+    started_at: startedAt,
+    completed_at: null,
+    message: reason || "Full Shopee read-only sync is running.",
+    error: null,
+  });
+
+  const errors = [];
+  let orders = [];
+  let products = [];
+  let inventory = [];
+
+  try {
+    const binding = await activeBinding();
+
+    try {
+      const productResult = await refreshProductsAndInventory(binding);
+      products = productResult.products;
+      inventory = productResult.inventory;
+      writeSyncState({
+        status: "running",
+        message: "Products and inventory snapshot completed. Orders are still syncing.",
+        products_count: products.length,
+        inventory_count: inventory.length,
+      });
+    } catch (error) {
+      errors.push(`products_inventory:${error && error.message ? error.message : "unknown"}`);
+    }
+
+    try {
+      orders = await refreshOrders(binding, { maxItems: MAX_SYNC_ITEMS, historyDays: ORDER_HISTORY_DAYS });
+    } catch (error) {
+      errors.push(`orders:${error && error.message ? error.message : "unknown"}`);
+    }
+
+    saveBinding({ ...binding, last_sync_at: nowIso() });
+  } catch (error) {
+    errors.push(`binding:${error && error.message ? error.message : "unknown"}`);
+  }
+
+  const counts = snapshotCounts();
+  const hasAnyData = counts.orders_count || counts.products_count || counts.inventory_count;
+  const status = errors.length ? (hasAnyData ? "partial" : "failed") : "complete";
+  return writeSyncState({
+    status,
+    running: false,
+    completed_at: nowIso(),
+    message: errors.length ? "Full sync finished with partial errors." : "Full Shopee read-only sync completed.",
+    error: errors.length ? errors.join(" | ") : null,
+    orders_count: counts.orders_count,
+    products_count: counts.products_count,
+    inventory_count: counts.inventory_count,
+  });
+}
+
+function startSyncJob(reason) {
+  if (syncJob) return readSyncState();
+  syncJob = runFullSync(reason)
+    .catch((error) => writeSyncState({
+      status: "failed",
+      running: false,
+      completed_at: nowIso(),
+      message: "Full sync failed.",
+      error: error && error.message ? error.message : "Unknown sync failure",
+    }))
+    .then((state) => {
+      syncJob = null;
+      writeSyncState(Object.assign({}, state || readSyncState(), { running: false }));
+    });
+  return readSyncState();
 }
 
 async function exchangeCodeForToken(code, shopId) {
@@ -417,6 +685,9 @@ async function handle(req, res) {
         order_history_days: ORDER_HISTORY_DAYS,
         page_size: PAGE_SIZE,
         max_sync_items: MAX_SYNC_ITEMS,
+        snapshot_max_age_ms: SNAPSHOT_MAX_AGE_MS,
+        snapshots: snapshotCounts(),
+        sync_state: readSyncState(),
         timestamp: nowIso(),
       });
     }
@@ -453,7 +724,7 @@ async function handle(req, res) {
     }
 
     if (url.pathname === "/binding" && req.method === "GET") {
-      const shops = readBindings();
+      const shops = publicBindings();
       const shop = shops[0] || null;
       return json(res, 200, {
         bound: shops.length > 0,
@@ -478,47 +749,138 @@ async function handle(req, res) {
         updated_at: nowIso(),
       };
       writeBindings(bindings);
-      return json(res, 200, { bound: true, status: "bound", shops: bindings, readonly: true });
+      return json(res, 200, { bound: true, status: "bound", shops: publicBindings(), readonly: true });
+    }
+
+    if (url.pathname === "/sync/status" && req.method === "GET") {
+      return json(res, 200, {
+        source: "shopee_snapshot",
+        snapshots: snapshotCounts(),
+        sync_state: readSyncState(),
+        stale: shouldRefreshSnapshots(),
+        readonly: true,
+      });
+    }
+
+    if (url.pathname === "/sync/start" && req.method === "GET") {
+      const state = startSyncJob("Manual Shopee full read-only sync requested.");
+      return json(res, 202, {
+        source: "shopee_snapshot",
+        started: true,
+        snapshots: snapshotCounts(),
+        sync_state: state,
+        readonly: true,
+      });
     }
 
     if (url.pathname === "/orders" && req.method === "GET") {
+      const refresh = boolParam(url.searchParams.get("refresh"));
+      const full = boolParam(url.searchParams.get("full")) || boolParam(url.searchParams.get("all"));
+      const snapshot = readSnapshot("orders");
+      if (snapshot && !refresh) {
+        if (snapshotAgeMs("orders") > SNAPSHOT_MAX_AGE_MS) {
+          startSyncJob("Orders snapshot is stale; background sync is running.");
+        }
+        return json(res, 200, {
+          source: "shopee_snapshot",
+          orders: snapshot.items,
+          orders_count: snapshot.count || snapshot.items.length,
+          synced_at: snapshot.created_at,
+          sync_state: readSyncState(),
+          readonly: true,
+        });
+      }
+      if (!refresh || full) {
+        const state = startSyncJob("Orders snapshot requested; full sync is running in background.");
+        return json(res, 202, {
+          source: "shopee_snapshot",
+          orders: snapshot ? snapshot.items : [],
+          orders_count: snapshot ? snapshot.count || snapshot.items.length : 0,
+          synced_at: snapshot ? snapshot.created_at : null,
+          sync_state: state,
+          message: "Orders are syncing in background. Recheck /sync/status or /orders later.",
+          readonly: true,
+        });
+      }
       const binding = await activeBinding();
-      const orders = await fetchOrders(binding);
+      const maxItems = numberOption(url.searchParams.get("limit") || url.searchParams.get("max"), PAGE_SIZE, 1, MAX_SYNC_ITEMS);
+      const historyDays = numberOption(url.searchParams.get("days") || url.searchParams.get("history_days"), ORDER_WINDOW_DAYS, 1, ORDER_HISTORY_DAYS);
+      const orders = await refreshOrders(binding, { maxItems, historyDays });
       saveBinding({ ...binding, last_sync_at: nowIso() });
       return json(res, 200, { source: "shopee_api", orders, orders_count: orders.length, synced_at: nowIso(), readonly: true });
     }
 
     if (url.pathname === "/products" && req.method === "GET") {
+      const refresh = boolParam(url.searchParams.get("refresh"));
+      const snapshot = readSnapshot("products");
+      if (snapshot && !refresh) {
+        if (snapshotAgeMs("products") > SNAPSHOT_MAX_AGE_MS) {
+          startSyncJob("Products snapshot is stale; background sync is running.");
+        }
+        return json(res, 200, {
+          source: "shopee_snapshot",
+          products: snapshot.items,
+          products_count: snapshot.count || snapshot.items.length,
+          synced_at: snapshot.created_at,
+          sync_state: readSyncState(),
+          readonly: true,
+        });
+      }
       const binding = await activeBinding();
-      const products = await fetchProducts(binding);
+      const maxItems = numberOption(url.searchParams.get("limit") || url.searchParams.get("max"), MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
+      const products = await fetchProducts(binding, { maxItems, pageSize: PAGE_SIZE });
+      writeSnapshot("products", products, { shop_id: String(binding.shop_id || "") });
+      writeSnapshot("inventory", inventoryFromProducts(products), { shop_id: String(binding.shop_id || "") });
       saveBinding({ ...binding, last_sync_at: nowIso() });
       return json(res, 200, { source: "shopee_api", products, products_count: products.length, synced_at: nowIso(), readonly: true });
     }
 
     if (url.pathname === "/inventory" && req.method === "GET") {
+      const refresh = boolParam(url.searchParams.get("refresh"));
+      const snapshot = readSnapshot("inventory");
+      if (snapshot && !refresh) {
+        if (snapshotAgeMs("inventory") > SNAPSHOT_MAX_AGE_MS) {
+          startSyncJob("Inventory snapshot is stale; background sync is running.");
+        }
+        return json(res, 200, {
+          source: "shopee_snapshot",
+          inventory: snapshot.items,
+          inventory_count: snapshot.count || snapshot.items.length,
+          synced_at: snapshot.created_at,
+          sync_state: readSyncState(),
+          readonly: true,
+        });
+      }
       const binding = await activeBinding();
-      const products = await fetchProducts(binding);
-      const inventory = inventoryFromProducts(products);
+      const result = await refreshProductsAndInventory(binding);
+      const inventory = result.inventory;
       saveBinding({ ...binding, last_sync_at: nowIso() });
       return json(res, 200, { source: "shopee_api", inventory, inventory_count: inventory.length, synced_at: nowIso(), readonly: true });
     }
 
     if (url.pathname === "/sync" && req.method === "GET") {
-      const binding = await activeBinding();
-      const [orders, products] = await Promise.all([fetchOrders(binding), fetchProducts(binding)]);
-      const inventory = inventoryFromProducts(products);
-      saveBinding({ ...binding, last_sync_at: nowIso() });
-      return json(res, 200, {
-        source: "shopee_api",
-        orders,
-        products,
-        inventory,
-        orders_count: orders.length,
-        products_count: products.length,
-        inventory_count: inventory.length,
-        synced_at: nowIso(),
-        readonly: true,
-      });
+      const manualStart = boolParam(url.searchParams.get("start")) || boolParam(url.searchParams.get("refresh"));
+      const hasProducts = Boolean(readSnapshot("products"));
+      const hasInventory = Boolean(readSnapshot("inventory"));
+      if (!hasProducts || !hasInventory) {
+        try {
+          const binding = await activeBinding();
+          await refreshProductsAndInventory(binding);
+          saveBinding({ ...binding, last_sync_at: nowIso() });
+        } catch (error) {
+          writeSyncState({
+            status: "partial",
+            message: "Products and inventory snapshot refresh failed.",
+            error: error && error.message ? error.message : "Unknown product snapshot error",
+          });
+        }
+      }
+      if (manualStart || shouldRefreshSnapshots()) {
+        startSyncJob(manualStart
+          ? "Manual Shopee full read-only sync requested."
+          : "Shopee snapshot is missing or stale; background sync is running.");
+      }
+      return json(res, 200, readBundleSnapshot());
     }
 
     return json(res, 404, { error: "Not found", readonly: true });
