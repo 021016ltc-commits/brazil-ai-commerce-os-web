@@ -430,9 +430,9 @@ async function handle(req, res) {
       if (index < 0) return json(res, 404, { error: "Shop binding not found.", readonly: true });
       bindings[index] = {
         ...bindings[index],
-        shop_name: body.shop_name ?? bindings[index].shop_name ?? null,
-        owner_name: body.owner_name ?? bindings[index].owner_name ?? null,
-        notes: body.notes ?? bindings[index].notes ?? null,
+        shop_name: body.shop_name != null ? body.shop_name : (bindings[index].shop_name != null ? bindings[index].shop_name : null),
+        owner_name: body.owner_name != null ? body.owner_name : (bindings[index].owner_name != null ? bindings[index].owner_name : null),
+        notes: body.notes != null ? body.notes : (bindings[index].notes != null ? bindings[index].notes : null),
         updated_at: nowIso(),
       };
       writeBindings(bindings);
