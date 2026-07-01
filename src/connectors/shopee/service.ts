@@ -225,7 +225,11 @@ async function fetchRemotePage<T>(path: string, key: string, params: Record<stri
   };
 }
 
-async function fetchRemoteJson(path: string, params: Record<string, string | number>): Promise<unknown> {
+async function fetchRemoteJson(
+  path: string,
+  params: Record<string, string | number>,
+  options: { timeoutMs?: number } = {},
+): Promise<unknown> {
   const baseUrl = process.env.SHOPEE_READONLY_API_BASE_URL?.trim();
   if (!baseUrl) throw new Error("Shopee read-only API base URL is not configured.");
 
@@ -243,7 +247,7 @@ async function fetchRemoteJson(path: string, params: Record<string, string | num
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), remoteFetchTimeoutMs());
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? remoteFetchTimeoutMs());
   let response: Response;
 
   try {
@@ -384,7 +388,7 @@ async function startRemoteShopeeSync(): Promise<{
   inventory_count: number;
   message: string;
 }> {
-  const payload = await fetchRemoteJson("sync/start", {});
+  const payload = await fetchRemoteJson("sync/start", {}, { timeoutMs: 8000 });
   const record = asRecord(payload);
   const snapshots = asRecord(record.snapshots);
   const syncState = asRecord(record.sync_state);
@@ -715,37 +719,19 @@ export async function syncShopeeReadOnlyData(): Promise<ShopeeSyncResult> {
         message: startResult.message,
       };
     } catch {
-      // Fall through to compatibility reads for older proxy deployments.
-    }
-
-    try {
-      payload = await fetchRemoteShopeeDataPartial();
-      source =
-        payload.orders.length > 0 || payload.products.length > 0 || payload.inventory.length > 0
-          ? "shopee_api"
-          : isMockDataAllowed()
-            ? "mock"
-            : "sqlite";
-      if (source === "mock") {
-        payload = {
-          orders: shopeeOrdersMock,
-          products: shopeeProductsMock,
-          inventory: shopeeInventoryMock,
-        };
-      }
-    } catch {
-      source = isMockDataAllowed() ? "mock" : "sqlite";
-      if (isMockDataAllowed()) {
-        payload = {
-          orders: shopeeOrdersMock,
-          products: shopeeProductsMock,
-          inventory: shopeeInventoryMock,
-        };
-      }
+      return {
+        source: "sqlite",
+        readonly: true,
+        synced_at: syncedAt,
+        orders_count: 0,
+        products_count: 0,
+        inventory_count: 0,
+        message: "Shopee background sync did not confirm quickly. Existing data remains available.",
+      };
     }
   }
 
-  if (!shouldUseMockData() && source !== "shopee_api") {
+  if (!shouldUseMockData()) {
     try {
       const official = await fetchOfficialShopeeReadOnlyData();
       if (official) {
