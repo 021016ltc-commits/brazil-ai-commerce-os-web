@@ -90,17 +90,50 @@ function errorMessage(error: unknown) {
 }
 
 function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): ShopeeOrder {
-  const quantity = Math.max(1, firstNumber([value.quantity, valueOf(value, "model_quantity_purchased"), valueOf(value, "item_quantity")], 1));
-  const price = firstNumber([value.price, valueOf(value, "total_amount"), valueOf(value, "order_amount"), valueOf(value, "escrow_amount")], 0);
+  const itemList = Array.isArray(value.item_list) ? (value.item_list as Array<Record<string, unknown>>) : [];
+  const firstItem = itemList[0] ?? {};
+  const orderId = cleanText(value.order_id ?? valueOf(value, "order_sn"));
+  const productId = cleanText(value.product_id ?? valueOf(firstItem, "item_id") ?? valueOf(firstItem, "product_id"));
+  const sku = cleanText(value.sku ?? valueOf(firstItem, "item_sku") ?? valueOf(firstItem, "model_sku"));
+  const quantity = Math.max(
+    1,
+    firstNumber(
+      [
+        value.quantity,
+        valueOf(value, "model_quantity_purchased"),
+        valueOf(value, "item_quantity"),
+        valueOf(firstItem, "model_quantity_purchased"),
+        valueOf(firstItem, "item_quantity"),
+        valueOf(firstItem, "quantity"),
+      ],
+      1,
+    ),
+  );
+  const price = firstNumber(
+    [
+      value.price,
+      valueOf(firstItem, "model_discounted_price"),
+      valueOf(firstItem, "model_original_price"),
+      valueOf(firstItem, "item_price"),
+      valueOf(value, "total_amount"),
+      valueOf(value, "order_amount"),
+      valueOf(value, "escrow_amount"),
+    ],
+    0,
+  );
 
   return {
-    order_id: String(value.order_id ?? ""),
-    product_id: String(value.product_id ?? ""),
-    sku: String(value.sku ?? ""),
+    order_id: orderId,
+    product_id: productId,
+    sku,
     quantity,
     price,
-    order_status: String(value.order_status ?? valueOf(value, "status") ?? "unknown"),
-    created_at: String(value.created_at ?? nowIso()),
+    order_status: cleanText(value.order_status ?? valueOf(value, "status") ?? "unknown"),
+    created_at: value.created_at
+      ? String(value.created_at)
+      : valueOf(value, "create_time")
+        ? new Date(Number(valueOf(value, "create_time")) * 1000).toISOString()
+        : nowIso(),
   };
 }
 
@@ -337,17 +370,10 @@ async function fetchRemoteEndpoint<T>(
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  try {
-    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 8_000 });
-    const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders")
-      .map(normalizeOrder)
-      .filter((item) => item.order_id);
-    if (orders.length > 0) return orders;
-  } catch {
-    // The proxy can return an empty snapshot while a full read is still running.
-  }
-
-  return fetchRemoteOrdersQuick().catch(() => []);
+  const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 5_000 });
+  return extractArray<Partial<ShopeeOrder>>(payload, "orders")
+    .map(normalizeOrder)
+    .filter((item) => item.order_id);
 }
 
 async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
@@ -370,20 +396,13 @@ async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
 
 async function fetchRemoteOrdersForSync(): Promise<ShopeeOrder[]> {
   try {
-    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 8_000 });
+    const payload = await fetchRemoteJson("orders", {}, { timeoutMs: 5_000 });
     const orders = extractArray<Partial<ShopeeOrder>>(payload, "orders")
       .map(normalizeOrder)
       .filter((item) => item.order_id);
     if (orders.length > 0) return orders;
   } catch {
-    // The proxy may still be building the order snapshot.
-  }
-
-  try {
-    const orders = await fetchRemoteOrdersQuick();
-    if (orders.length > 0) return orders;
-  } catch {
-    // Do not block the web request on a full order-history read.
+    // The proxy may still be building the order snapshot. Do not block web requests.
   }
 
   return [];
@@ -721,19 +740,22 @@ export async function getShopeeOrdersResponse(): Promise<ShopeeReadOnlyApiRespon
 
   if (shopeeApiConfigured()) {
     try {
-      let orders = await fetchRemoteOrders();
-      if (orders.length === 0) {
-        const status = await fetchRemoteSyncStatus().catch(() => null);
-        if ((status?.orders_count ?? 0) > 0) {
-          orders = await fetchRemoteOrders();
-        }
-      }
+      const orders = await fetchRemoteOrders();
       if (orders.length > 0) {
         const syncedAt = await writeShopeeCacheBestEffort({ orders, products: [], inventory: [] });
         return { source: "shopee_api", data: orders, synced_at: syncedAt, readonly: true };
       }
+
+      const status = await fetchRemoteSyncStatus().catch(() => null);
+      return {
+        source: "shopee_api",
+        data: [],
+        synced_at: status?.synced_at ?? null,
+        readonly: true,
+      };
     } catch {
       // Full order synchronization is handled by /api/shopee/sync. Page reads must stay fast.
+      return { source: "shopee_api", data: [], synced_at: null, readonly: true };
     }
   }
 
