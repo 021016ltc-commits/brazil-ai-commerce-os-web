@@ -282,11 +282,19 @@ function opportunityLevel(score: number): "A" | "B" | "C" {
 }
 
 function opportunityScore(item: ProductAgg) {
-  return clamp(Math.round(52 + item.orderQty * 4 + item.orderCount * 2 + item.revenue / 100), 45, 96);
+  if (item.orderQty > 0 || item.revenue > 0) {
+    return clamp(Math.round(52 + item.orderQty * 4 + item.orderCount * 2 + item.revenue / 100), 45, 96);
+  }
+
+  return clamp(Math.round(56 + (item.hasProductRecord ? 10 : 0) + (item.hasInventoryRecord ? 8 : 0) + (item.price > 0 ? 6 : 0)), 52, 76);
 }
 
 function marketScore(item: ProductAgg) {
-  return clamp(Math.round(50 + item.orderQty * 3 + item.revenue / 160), 45, 92);
+  if (item.orderQty > 0 || item.revenue > 0) {
+    return clamp(Math.round(50 + item.orderQty * 3 + item.revenue / 160), 45, 92);
+  }
+
+  return clamp(Math.round(54 + (item.hasProductRecord ? 9 : 0) + (item.hasInventoryRecord ? 7 : 0)), 50, 74);
 }
 
 function riskLevelFromOpportunity(score: number): RiskLevel {
@@ -297,8 +305,8 @@ function riskLevelFromOpportunity(score: number): RiskLevel {
 
 function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRisks: InventoryRiskItem[]): OpportunitiesApiResponse {
   const opportunityProducts = aggs
-    .filter((item) => item.orderQty > 0 || item.revenue > 0)
-    .slice(0, 12)
+    .filter((item) => item.orderQty > 0 || item.revenue > 0 || item.hasProductRecord || item.hasInventoryRecord)
+    .slice(0, 24)
     .map<OpportunityProductItem>((item) => {
       const score = opportunityScore(item);
       return {
@@ -307,11 +315,14 @@ function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRi
         title_current: productTitle(item),
         price_amount: round(item.price),
         rating: 0,
-        sold_count_text: `${item.orderQty} 件真实订单销量`,
+        sold_count_text: item.orderQty > 0 ? `${item.orderQty} 件真实订单销量` : "已读取真实商品，等待订单匹配",
         market_score: marketScore(item),
         opportunity_score: score,
         recommendation_level: opportunityLevel(score),
-        decision_notes: "基于已授权店铺真实订单生成，建议先核对库存、成本和广告承接。",
+        decision_notes:
+          item.orderQty > 0 || item.revenue > 0
+            ? "基于已授权店铺真实订单生成，建议先核对库存、成本和广告承接。"
+            : "已读取真实商品数据，建议先补齐价格、库存和广告数据后再判断是否放量。",
         risk_level: riskLevelFromOpportunity(score),
         risk_score: clamp(100 - score, 5, 70),
       };
@@ -319,12 +330,12 @@ function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRi
 
   const keywords: Keyword[] = [
     {
-      keyword_uid: keywordUid("Shopee 真实订单商品"),
+      keyword_uid: keywordUid("Shopee 真实店铺商品"),
       platform: PLATFORM,
       market_code: MARKET_CODE,
-      keyword: "Shopee 真实订单商品",
-      normalized_keyword: "shopee_real_order_products",
-      category_hint: "真实店铺成交商品",
+      keyword: "Shopee 真实店铺商品",
+      normalized_keyword: "shopee_real_store_products",
+      category_hint: "真实店铺商品",
       search_volume_index: opportunityProducts.length,
       trend_direction: opportunityProducts.length > 0 ? "up" : "flat",
     },
@@ -346,7 +357,7 @@ function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRi
     opportunity_id: uid("opp", item.product_uid),
     product_uid: item.product_uid,
     keyword_uid: keywords[0].keyword_uid,
-    category_hint: "真实店铺成交商品",
+    category_hint: "真实店铺商品",
     market_demand_score: item.market_score,
     competition_score: 50,
     market_score: item.market_score,
@@ -356,13 +367,13 @@ function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRi
     decision_notes: item.decision_notes,
     risk_level: item.risk_level,
     risk_score: item.risk_score,
-    reason: "来自已授权店铺订单、商品和库存数据。",
+    reason: "来自已授权店铺商品、订单和库存数据。",
   }));
 
   const keyword_opportunities: KeywordOpportunityItem[] = market_score.map((score) => ({
     keyword_uid: score.keyword_uid,
     keyword: score.keyword,
-    category_hint: "真实店铺成交商品",
+    category_hint: "真实店铺商品",
     market_demand_score: score.market_demand_score,
     competition_score: score.competition_score,
     trend_score: score.trend_score,
@@ -394,7 +405,13 @@ function buildOpportunities(aggs: ProductAgg[], products: Product[], inventoryRi
 }
 
 function stockStatus(item: ProductAgg, meaningfulStock: boolean): StockStatus {
-  if (!meaningfulStock || !item.hasInventoryRecord) return "healthy";
+  if (!item.hasInventoryRecord && !item.hasProductRecord) return "healthy";
+  if (!meaningfulStock) {
+    if (item.stock <= 0 && item.orderQty > 0) return "stockout_risk";
+    if (item.stock <= 0) return "reorder_soon";
+    return "healthy";
+  }
+  if (!item.hasInventoryRecord) return "reorder_soon";
   if (item.stock <= 0 && item.orderQty > 0) return "stockout_risk";
   const dailySales = Math.max(0.1, item.orderQty / 14);
   const days = item.stock / dailySales;
@@ -412,7 +429,7 @@ function statusRiskLevel(status: StockStatus): RiskLevel {
 }
 
 function statusReason(status: StockStatus, item: ProductAgg, meaningfulStock: boolean) {
-  if (!meaningfulStock || !item.hasInventoryRecord) return "Shopee 当前只返回了商品和订单，库存明细仍需继续同步或授权对应范围。";
+  if (!meaningfulStock || !item.hasInventoryRecord) return "已读取真实商品，但库存字段仍需复核；当前先按库存待确认处理。";
   if (status === "stockout_risk") return "近期有真实订单，但可用库存偏低，需要人工确认是否断货。";
   if (status === "reorder_soon") return "按近 14 天订单估算，可售天数偏低。";
   if (status === "slow_moving") return "库存可售天数偏高，且近期订单较少。";
@@ -421,7 +438,7 @@ function statusReason(status: StockStatus, item: ProductAgg, meaningfulStock: bo
 }
 
 function statusAction(status: StockStatus, meaningfulStock: boolean) {
-  if (!meaningfulStock) return "先完成库存详情同步，再做补货或断货判断。";
+  if (!meaningfulStock) return "先核对 Seller Center 库存字段，再决定是否补货或暂停投放。";
   if (status === "stockout_risk") return "人工核对仓库库存，必要时创建补货审批。";
   if (status === "reorder_soon") return "准备补货计划，但不要自动下单。";
   if (status === "slow_moving" || status === "overstock_risk") return "检查价格、广告和活动承接，避免继续压货。";
@@ -454,7 +471,7 @@ function buildInventory(aggs: ProductAgg[], meaningfulStock: boolean): Inventory
       risk_id: uid("inventory_risk", item.product_uid),
       product_uid: item.product_uid,
       platform: PLATFORM,
-      risk_type: item.stock_status === "stockout_risk" ? "缺货风险" : "库存效率风险",
+      risk_type: item.stock_status === "stockout_risk" ? "缺货风险" : "库存待确认",
       risk_level: statusRiskLevel(item.stock_status),
       risk_reason: statusReason(item.stock_status, aggs.find((agg) => productUid(agg.productId) === item.product_uid)!, meaningfulStock),
       suggested_action: statusAction(item.stock_status, meaningfulStock),
@@ -476,10 +493,11 @@ function buildInventory(aggs: ProductAgg[], meaningfulStock: boolean): Inventory
     }));
 
   const stockout = inventory_stock.filter((item) => item.stock_status === "stockout_risk").length;
+  const reorderSoon = inventory_stock.filter((item) => item.stock_status === "reorder_soon").length;
   const overstock = inventory_stock.filter((item) => item.stock_status === "overstock_risk").length;
   const slowMoving = inventory_stock.filter((item) => item.stock_status === "slow_moving").length;
-  const riskPenalty = stockout * 14 + overstock * 8 + slowMoving * 6;
-  const stockHealth = meaningfulStock ? clamp(100 - riskPenalty, 0, 100) : 70;
+  const riskPenalty = stockout * 14 + reorderSoon * 4 + overstock * 8 + slowMoving * 6;
+  const stockHealth = inventory_stock.length > 0 ? clamp(100 - riskPenalty, 0, 100) : 70;
   const totalInventoryValue = round(inventory_stock.reduce((sum, item) => {
     const agg = aggs.find((entry) => productUid(entry.productId) === item.product_uid);
     return sum + item.stock_qty * (agg?.price || 0);
@@ -512,7 +530,8 @@ function buildInventory(aggs: ProductAgg[], meaningfulStock: boolean): Inventory
 function buildProfit(aggs: ProductAgg[], inventory: InventoryApiResponse): ProfitApiResponse {
   const gmv = totalRevenue(aggs);
   const product_profit: ProductProfitItem[] = aggs
-    .filter((item) => item.revenue > 0 || item.orderQty > 0)
+    .filter((item) => item.revenue > 0 || item.orderQty > 0 || item.hasProductRecord)
+    .slice(0, 100)
     .map((item) => ({
       profit_item_id: uid("profit", item.productId),
       product_uid: productUid(item.productId),
@@ -524,7 +543,7 @@ function buildProfit(aggs: ProductAgg[], inventory: InventoryApiResponse): Profi
       net_profit: 0,
       net_margin: 0,
       inventory_days: inventory.inventory_stock.find((stock) => stock.product_uid === productUid(item.productId))?.days_of_stock || 0,
-      risk_level: item.revenue > 0 ? "medium" : "low",
+      risk_level: item.revenue > 0 ? "medium" : "medium",
     }));
 
   const profit_risk: ProfitRiskSummary = {

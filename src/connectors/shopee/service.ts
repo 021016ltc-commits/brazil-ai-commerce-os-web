@@ -144,6 +144,11 @@ function remoteFastReadItems() {
   return Math.max(50, Math.min(1000, Number.isFinite(configured) ? configured : 200));
 }
 
+function remoteOrderFastReadItems() {
+  const configured = Number(process.env.SHOPEE_ORDER_FAST_READ_ITEMS ?? 50);
+  return Math.max(10, Math.min(200, Number.isFinite(configured) ? configured : 50));
+}
+
 function remoteMaxSyncItems() {
   const configured = Number(process.env.SHOPEE_MAX_SYNC_ITEMS ?? process.env.SHOPEE_FULL_SYNC_MAX_ITEMS ?? 10000);
   return Math.max(50, Math.min(50000, Number.isFinite(configured) ? configured : 10000));
@@ -263,9 +268,9 @@ async function fetchRemoteEndpoint<T>(
   path: string,
   key: string,
   preferredKey: string,
-  options: { full?: boolean } = {},
+  options: { full?: boolean; maxItems?: number } = {},
 ): Promise<T[]> {
-  const maxItems = options.full ? remoteMaxSyncItems() : remoteFastReadItems();
+  const maxItems = options.maxItems ?? (options.full ? remoteMaxSyncItems() : remoteFastReadItems());
   const pageSize = remotePageSize(maxItems);
   const maxPages = Math.max(1, Math.min(1000, Math.ceil(maxItems / pageSize) + 5));
   const items: T[] = [];
@@ -320,7 +325,9 @@ async function fetchRemoteEndpoint<T>(
 }
 
 async function fetchRemoteOrders(): Promise<ShopeeOrder[]> {
-  const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id");
+  const orders = await fetchRemoteEndpoint<Partial<ShopeeOrder>>("orders", "orders", "order_id", {
+    maxItems: remoteOrderFastReadItems(),
+  });
   return orders.map(normalizeOrder).filter((item) => item.order_id);
 }
 
