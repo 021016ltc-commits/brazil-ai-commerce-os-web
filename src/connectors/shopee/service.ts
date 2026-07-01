@@ -62,6 +62,16 @@ function valueOf<T extends Record<string, unknown>>(value: T, key: string) {
   return value[key];
 }
 
+function cleanText(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!/[ÃÂ]/.test(text)) return text;
+  try {
+    return Buffer.from(text, "latin1").toString("utf8");
+  } catch {
+    return text;
+  }
+}
+
 function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): ShopeeOrder {
   const quantity = Math.max(1, firstNumber([value.quantity, valueOf(value, "model_quantity_purchased"), valueOf(value, "item_quantity")], 1));
   const price = firstNumber([value.price, valueOf(value, "total_amount"), valueOf(value, "order_amount"), valueOf(value, "escrow_amount")], 0);
@@ -80,7 +90,7 @@ function normalizeOrder(value: Partial<ShopeeOrder> & Record<string, unknown>): 
 function normalizeProduct(value: Partial<ShopeeProduct> & Record<string, unknown>): ShopeeProduct {
   return {
     product_id: String(value.product_id ?? ""),
-    title: String(value.title ?? ""),
+    title: cleanText(value.title ?? valueOf(value, "item_name") ?? valueOf(value, "name")),
     price: firstNumber([value.price, valueOf(value, "current_price"), valueOf(value, "original_price")], 0),
     stock: firstNumber([value.stock, valueOf(value, "available_stock"), valueOf(value, "normal_stock"), valueOf(value, "current_stock")], 0),
     sales_count: firstNumber([value.sales_count, valueOf(value, "sales"), valueOf(value, "historical_sold"), valueOf(value, "sold")], 0),
