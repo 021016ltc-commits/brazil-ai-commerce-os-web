@@ -26,7 +26,7 @@ const SNAPSHOT_FILES = {
   inventory: path.join(DATA_DIR, "inventory-snapshot.json"),
 };
 const SYNC_STATE_FILE = path.join(DATA_DIR, "sync-state.json");
-const SERVICE_VERSION = "2026-07-01.snapshot-sync-v1";
+const SERVICE_VERSION = "2026-07-02.order-timefield-sync-v2";
 let syncJob = null;
 
 function nowIso() {
@@ -445,11 +445,12 @@ async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns, optio
   const config = options || {};
   const maxItems = numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
   const pageSize = numberOption(config.pageSize, PAGE_SIZE, 1, PAGE_SIZE);
+  const timeRangeField = config.timeRangeField || "update_time";
   let cursor = "";
   while (orderSns.length < maxItems) {
     const remaining = Math.max(1, maxItems - orderSns.length);
     const payload = await shopeeGet("/api/v2/order/get_order_list", {
-      time_range_field: "create_time",
+      time_range_field: timeRangeField,
       time_from: timeFrom,
       time_to: timeTo,
       page_size: Math.min(pageSize, remaining),
@@ -473,12 +474,21 @@ async function fetchOrders(binding, options) {
   const now = nowSeconds();
   const historyFrom = now - historyDays * 24 * 60 * 60;
   const orderSns = [];
-  let windowTo = now;
+  const timeRangeFields = ["update_time", "create_time"];
 
-  while (windowTo > historyFrom && orderSns.length < maxItems) {
-    const windowFrom = Math.max(historyFrom, windowTo - windowDays * 24 * 60 * 60 + 1);
-    await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns, { maxItems, pageSize: config.pageSize });
-    windowTo = windowFrom - 1;
+  for (let fieldIndex = 0; fieldIndex < timeRangeFields.length && orderSns.length < maxItems; fieldIndex += 1) {
+    const timeRangeField = timeRangeFields[fieldIndex];
+    let windowTo = now;
+
+    while (windowTo > historyFrom && orderSns.length < maxItems) {
+      const windowFrom = Math.max(historyFrom, windowTo - windowDays * 24 * 60 * 60 + 1);
+      await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns, {
+        maxItems,
+        pageSize: config.pageSize,
+        timeRangeField,
+      });
+      windowTo = windowFrom - 1;
+    }
   }
 
   const uniqueOrderSns = Array.from(new Set(orderSns)).slice(0, maxItems);
