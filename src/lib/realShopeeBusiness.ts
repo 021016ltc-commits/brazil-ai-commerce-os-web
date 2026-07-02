@@ -69,8 +69,16 @@ type ProductAgg = {
   price: number;
   stockQty: number;
   reservedStock: number;
+  modelCount: number;
+  stockKnown: boolean;
   salesCount: number;
   orderQty: number;
+  orderCount: number;
+  todayOrderQty: number;
+  todayRevenue: number;
+  yesterdayOrderQty: number;
+  yesterdayRevenue: number;
+  monthRevenue: number;
   revenue: number;
   dailySalesAvg: number;
   daysOfStock: number;
@@ -113,6 +121,7 @@ type RealShopeeBundle = {
 const PLATFORM: Platform = "Shopee";
 const MARKET_CODE = "br";
 const CURRENCY = "BRL";
+const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
 const CACHE_TTL_MS = 60_000;
 const DEFAULT_SHOP_ID = "authorized_shop";
 const REORDER_LEAD_TIME_DAYS = 14;
@@ -124,8 +133,43 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function dateKeyInBrazil(value: string | number | Date = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return nowIso().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function today() {
-  return nowIso().slice(0, 10);
+  return dateKeyInBrazil(new Date());
+}
+
+function yesterday() {
+  return dateKeyInBrazil(new Date(Date.now() - 24 * 60 * 60 * 1000));
+}
+
+function currentMonthKey() {
+  return today().slice(0, 7);
+}
+
+function normalizeTimestamp(value: unknown) {
+  if (value === null || value === undefined || value === "") return nowIso();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const millis = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(millis).toISOString();
+  }
+  const text = String(value).trim();
+  if (/^\d+$/.test(text)) {
+    const raw = Number(text);
+    const millis = raw > 1_000_000_000_000 ? raw : raw * 1000;
+    return new Date(millis).toISOString();
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? nowIso() : parsed.toISOString();
 }
 
 function asRecord(value: unknown): AnyRecord {
@@ -221,28 +265,42 @@ function normalizeOrder(value: unknown): ShopeeOrder {
     quantity: Math.max(0, asNumber(item.quantity ?? item.qty ?? item.item_count, 0)),
     price: Math.max(0, asNumber(item.price ?? item.item_price ?? item.amount, 0)),
     order_status: asString(item.order_status ?? item.status, "unknown"),
-    created_at: asString(item.created_at ?? item.create_time ?? item.order_time, nowIso()),
+    created_at: normalizeTimestamp(item.created_at ?? item.create_time ?? item.order_time),
   };
 }
 
 function normalizeProduct(value: unknown): ShopeeProduct {
   const item = asRecord(value);
   const productId = asString(item.product_id ?? item.item_id ?? item.itemId ?? item.id, `item_${hashText(JSON.stringify(item))}`);
+  const stock = Math.max(0, asNumber(item.stock ?? item.normal_stock ?? item.available_stock, 0));
+  const reservedStock = Math.max(0, asNumber(item.reserved_stock ?? item.reservedStock ?? item.reserved ?? item.reserved_stock_qty, 0));
+  const modelCount = Math.max(0, asNumber(item.model_count ?? item.modelCount, 0));
   return {
     product_id: productId,
     title: cleanText(item.title ?? item.item_name ?? item.name, `Shopee Product ${productId}`),
     price: Math.max(0, asNumber(item.price ?? item.current_price ?? item.price_amount, 0)),
-    stock: Math.max(0, asNumber(item.stock ?? item.normal_stock ?? item.available_stock, 0)),
+    stock,
     sales_count: Math.max(0, asNumber(item.sales_count ?? item.sales ?? item.sold ?? item.historical_sold, 0)),
+    reserved_stock: reservedStock,
+    model_count: modelCount,
+    stock_known: item.stock_known !== undefined || item.stockKnown !== undefined ? Boolean(item.stock_known ?? item.stockKnown) : stock > 0 || reservedStock > 0 || modelCount > 0,
+    shop_id: asString(item.shop_id ?? item.shopId, ""),
   };
 }
 
 function normalizeInventory(value: unknown): ShopeeInventoryItem {
   const item = asRecord(value);
+  const availableStock = Math.max(0, asNumber(item.available_stock ?? item.stock ?? item.normal_stock, 0));
+  const reservedStock = Math.max(0, asNumber(item.reserved_stock ?? item.reserved ?? item.allocated_stock, 0));
+  const modelCount = Math.max(0, asNumber(item.model_count ?? item.modelCount, 0));
   return {
     product_id: asString(item.product_id ?? item.item_id ?? item.itemId ?? item.id, ""),
-    available_stock: Math.max(0, asNumber(item.available_stock ?? item.stock ?? item.normal_stock, 0)),
-    reserved_stock: Math.max(0, asNumber(item.reserved_stock ?? item.reserved ?? item.allocated_stock, 0)),
+    available_stock: availableStock,
+    reserved_stock: reservedStock,
+    model_count: modelCount,
+    stock_known:
+      item.stock_known !== undefined || item.stockKnown !== undefined ? Boolean(item.stock_known ?? item.stockKnown) : availableStock > 0 || reservedStock > 0 || modelCount > 0,
+    shop_id: asString(item.shop_id ?? item.shopId, ""),
   };
 }
 
@@ -250,7 +308,10 @@ function deriveInventoryFromProducts(products: ShopeeProduct[]): ShopeeInventory
   return products.map((product) => ({
     product_id: product.product_id,
     available_stock: product.stock,
-    reserved_stock: 0,
+    reserved_stock: product.reserved_stock ?? 0,
+    model_count: product.model_count ?? 0,
+    stock_known: product.stock_known ?? product.stock > 0,
+    shop_id: product.shop_id,
   }));
 }
 
@@ -277,7 +338,8 @@ function riskLevel(score: number): RiskLevel {
   return "low";
 }
 
-function statusFromStock(stockQty: number, dailySalesAvg: number): { status: StockStatus; riskScore: number } {
+function statusFromStock(stockQty: number, dailySalesAvg: number, stockKnown: boolean): { status: StockStatus; riskScore: number } {
+  if (!stockKnown) return { status: "healthy", riskScore: 25 };
   if (stockQty <= 0) return { status: "stockout_risk", riskScore: 95 };
   if (dailySalesAvg > 0) {
     const days = stockQty / dailySalesAvg;
@@ -291,29 +353,82 @@ function statusFromStock(stockQty: number, dailySalesAvg: number): { status: Sto
 
 function aggregateProducts(products: ShopeeProduct[], inventory: ShopeeInventoryItem[], orders: ShopeeOrder[], shopId: string): ProductAgg[] {
   const inventoryByProduct = new Map(inventory.map((item) => [item.product_id, item]));
-  const orderByProduct = new Map<string, { qty: number; revenue: number }>();
+  const todayKey = today();
+  const yesterdayKey = yesterday();
+  const monthKey = currentMonthKey();
+  const orderByProduct = new Map<
+    string,
+    {
+      qty: number;
+      revenue: number;
+      orderIds: Set<string>;
+      todayQty: number;
+      todayRevenue: number;
+      yesterdayQty: number;
+      yesterdayRevenue: number;
+      monthRevenue: number;
+    }
+  >();
 
   for (const order of orders) {
     if (!order.product_id) continue;
-    const current = orderByProduct.get(order.product_id) ?? { qty: 0, revenue: 0 };
+    const current =
+      orderByProduct.get(order.product_id) ??
+      {
+        qty: 0,
+        revenue: 0,
+        orderIds: new Set<string>(),
+        todayQty: 0,
+        todayRevenue: 0,
+        yesterdayQty: 0,
+        yesterdayRevenue: 0,
+        monthRevenue: 0,
+      };
     const quantity = Math.max(1, order.quantity || 1);
+    const revenue = Math.max(0, order.price * quantity);
+    const orderDate = dateKeyInBrazil(order.created_at);
     current.qty += quantity;
-    current.revenue += order.price * quantity;
+    current.revenue += revenue;
+    current.orderIds.add(order.order_id);
+    if (orderDate === todayKey) {
+      current.todayQty += quantity;
+      current.todayRevenue += revenue;
+    }
+    if (orderDate === yesterdayKey) {
+      current.yesterdayQty += quantity;
+      current.yesterdayRevenue += revenue;
+    }
+    if (orderDate.slice(0, 7) === monthKey) current.monthRevenue += revenue;
     orderByProduct.set(order.product_id, current);
   }
 
   return products.slice(0, MAX_ITEMS).map((product) => {
     const itemInventory = inventoryByProduct.get(product.product_id);
-    const orderStats = orderByProduct.get(product.product_id) ?? { qty: 0, revenue: 0 };
+    const orderStats =
+      orderByProduct.get(product.product_id) ??
+      {
+        qty: 0,
+        revenue: 0,
+        orderIds: new Set<string>(),
+        todayQty: 0,
+        todayRevenue: 0,
+        yesterdayQty: 0,
+        yesterdayRevenue: 0,
+        monthRevenue: 0,
+      };
     const stockQty = itemInventory ? itemInventory.available_stock : product.stock;
-    const reservedStock = itemInventory ? itemInventory.reserved_stock : 0;
+    const reservedStock = itemInventory ? itemInventory.reserved_stock : product.reserved_stock ?? 0;
+    const modelCount = itemInventory?.model_count ?? product.model_count ?? 0;
+    const stockKnown = itemInventory?.stock_known ?? product.stock_known ?? (stockQty > 0 || reservedStock > 0 || modelCount > 0);
     const salesCount = Math.max(product.sales_count, orderStats.qty);
-    const dailySalesAvg = Math.max(0, salesCount / 30);
+    const dailySalesAvg = Math.max(0, orderStats.qty / 30, salesCount / 30);
     const daysOfStock = dailySalesAvg > 0 ? Math.round((stockQty / dailySalesAvg) * 10) / 10 : stockQty > 0 ? 999 : 0;
-    const stock = statusFromStock(stockQty, dailySalesAvg);
+    const stock = statusFromStock(stockQty, dailySalesAvg, stockKnown);
     const keyword = keywordFromTitle(product.title);
+    const inferredPrice = orderStats.qty > 0 ? orderStats.revenue / orderStats.qty : 0;
+    const price = product.price > 0 ? product.price : inferredPrice;
     const marketScore = Math.max(35, Math.min(96, 45 + Math.min(35, salesCount * 2) + Math.max(0, 20 - stock.riskScore / 5)));
-    const opportunityScore = Math.max(20, Math.min(98, marketScore + (stock.riskScore >= 70 ? 8 : 0) + (product.price > 0 ? 5 : 0)));
+    const opportunityScore = Math.max(20, Math.min(98, marketScore + (stock.riskScore >= 70 ? 8 : 0) + (price > 0 ? 5 : 0)));
 
     return {
       productId: product.product_id,
@@ -321,11 +436,19 @@ function aggregateProducts(products: ShopeeProduct[], inventory: ShopeeInventory
       title: product.title,
       keyword,
       keywordUid: keywordUid(keyword),
-      price: product.price,
+      price,
       stockQty,
       reservedStock,
+      modelCount,
+      stockKnown,
       salesCount,
       orderQty: orderStats.qty,
+      orderCount: orderStats.orderIds.size,
+      todayOrderQty: orderStats.todayQty,
+      todayRevenue: orderStats.todayRevenue,
+      yesterdayOrderQty: orderStats.yesterdayQty,
+      yesterdayRevenue: orderStats.yesterdayRevenue,
+      monthRevenue: orderStats.monthRevenue,
       revenue: orderStats.revenue,
       dailySalesAvg,
       daysOfStock,
@@ -558,6 +681,9 @@ function average(values: number[]) {
 
 function buildProfit(items: ProductAgg[], syncedAt: string): ProfitApiResponse {
   const revenue = items.reduce((sum, item) => sum + item.revenue, 0);
+  const todayRevenue = items.reduce((sum, item) => sum + item.todayRevenue, 0);
+  const yesterdayRevenue = items.reduce((sum, item) => sum + item.yesterdayRevenue, 0);
+  const monthRevenue = items.reduce((sum, item) => sum + item.monthRevenue, 0);
   const procurement = revenue * 0.55;
   const logistics = revenue * 0.1;
   const commission = revenue * 0.12;
@@ -565,6 +691,9 @@ function buildProfit(items: ProductAgg[], syncedAt: string): ProfitApiResponse {
   const ads = 0;
   const totalCost = procurement + logistics + commission + tax + ads;
   const netProfit = revenue - totalCost;
+  const todayNetProfit = todayRevenue * 0.27;
+  const yesterdayNetProfit = yesterdayRevenue * 0.27;
+  const monthNetProfit = monthRevenue * 0.27;
   const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
 
   const productProfit: ProductProfitItem[] = items.map((item) => {
@@ -583,6 +712,12 @@ function buildProfit(items: ProductAgg[], syncedAt: string): ProfitApiResponse {
       net_margin: Number(margin.toFixed(2)),
       inventory_days: item.daysOfStock,
       risk_level: margin > 0 && margin < 10 ? "high" : item.riskLevel,
+      today_revenue: Number(item.todayRevenue.toFixed(2)),
+      yesterday_revenue: Number(item.yesterdayRevenue.toFixed(2)),
+      month_revenue: Number(item.monthRevenue.toFixed(2)),
+      today_net_profit: Number((item.todayRevenue * 0.27).toFixed(2)),
+      yesterday_net_profit: Number((item.yesterdayRevenue * 0.27).toFixed(2)),
+      month_net_profit: Number((item.monthRevenue * 0.27).toFixed(2)),
     };
   });
 
@@ -606,10 +741,10 @@ function buildProfit(items: ProductAgg[], syncedAt: string): ProfitApiResponse {
       profit_snapshot_id: `profit_${Date.now()}`,
       reporting_date: syncedAt,
       market_code: MARKET_CODE,
-      yesterday_net_profit: Number(netProfit.toFixed(2)),
-      month_net_profit: Number(netProfit.toFixed(2)),
+      yesterday_net_profit: Number((yesterdayNetProfit || todayNetProfit || netProfit).toFixed(2)),
+      month_net_profit: Number((monthNetProfit || netProfit).toFixed(2)),
       net_margin: Number(netMargin.toFixed(2)),
-      cash_flow: Number(netProfit.toFixed(2)),
+      cash_flow: Number((todayNetProfit || netProfit).toFixed(2)),
       inventory_turnover_days: 0,
       procurement_cost: Number(procurement.toFixed(2)),
       advertising_cost: Number(ads.toFixed(2)),
@@ -913,12 +1048,16 @@ function buildDashboard(bundle: Pick<RealShopeeBundle, "products" | "inventory" 
     },
   };
 
+  const todayRevenue = bundle.profit.product_profit.reduce((total, item) => total + (item.today_revenue ?? 0), 0);
+  const todayProfit = bundle.profit.product_profit.reduce((total, item) => total + (item.today_net_profit ?? 0), 0);
+  const totalRevenue = bundle.profit.product_profit.reduce((total, item) => total + item.revenue, 0);
+
   const snapshot: DashboardSnapshot = {
     reporting_date: today(),
     market_code: MARKET_CODE,
     bossMetrics: [
-      metric("today_sales", "今日销售", bundle.profit.product_profit.reduce((total, item) => total + item.revenue, 0), "currency", "来自已授权 Shopee 店铺", "neutral"),
-      metric("today_profit", "今日利润", profit.yesterday_net_profit, "currency", "按当前可得订单估算", "good"),
+      metric("today_sales", "今日销售", Number((todayRevenue || totalRevenue).toFixed(2)), "currency", "来自已授权 Shopee 店铺", "neutral"),
+      metric("today_profit", "今日利润", Number((todayProfit || profit.cash_flow || profit.yesterday_net_profit).toFixed(2)), "currency", "按当前可读取订单估算", "good"),
       metric("inventory_risk", "库存风险", inventory.stockout_risk_count, "count", "缺货风险数量", inventory.stockout_risk_count > 0 ? "risk" : "good"),
       metric("pending_tasks", "待处理事项", bundle.tasks.overview.total_tasks, "count", "今日任务数量", bundle.tasks.overview.total_tasks > 0 ? "warn" : "good"),
     ],

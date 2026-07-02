@@ -719,6 +719,12 @@ export interface ProductProfitItem {
   net_margin: number;
   inventory_days: number;
   risk_level: RiskLevel;
+  today_revenue?: number;
+  yesterday_revenue?: number;
+  month_revenue?: number;
+  today_net_profit?: number;
+  yesterday_net_profit?: number;
+  month_net_profit?: number;
 }
 
 export interface ProfitApiResponse {
@@ -980,12 +986,19 @@ export interface ShopeeProduct {
   price: number;
   stock: number;
   sales_count: number;
+  reserved_stock?: number;
+  model_count?: number;
+  stock_known?: boolean;
+  shop_id?: string;
 }
 
 export interface ShopeeInventoryItem {
   product_id: string;
   available_stock: number;
   reserved_stock: number;
+  model_count?: number;
+  stock_known?: boolean;
+  shop_id?: string;
 }
 
 export interface ShopeeAdCampaign {

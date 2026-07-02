@@ -30,7 +30,7 @@ const ORDER_STATUS_FILTERS = String(
   process.env.SHOPEE_ORDER_STATUS_FILTERS
     || "READY_TO_SHIP,PROCESSED,SHIPPED,COMPLETED,CANCELLED,IN_CANCEL,UNPAID,TO_RETURN,INVOICE_PENDING",
 ).split(",").map((item) => item.trim()).filter(Boolean);
-const SERVICE_VERSION = "2026-07-02.order-status-full-sync-v3";
+const SERVICE_VERSION = "2026-07-02.product-model-stock-v4";
 let syncJob = null;
 
 function nowIso() {
@@ -353,14 +353,105 @@ function firstNumber(values, fallback = 0) {
   return fallback;
 }
 
+function firstUsefulNumber(values, fallback = 0) {
+  let zeroValue = null;
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) continue;
+    if (numberValue > 0) return numberValue;
+    if (zeroValue === null) zeroValue = numberValue;
+  }
+  return zeroValue !== null ? zeroValue : fallback;
+}
+
+function sumStockRows(rows) {
+  return asArray(rows).reduce((total, row) => {
+    if (!row || typeof row !== "object") return total;
+    const value = firstUsefulNumber([
+      row.stock,
+      row.current_stock,
+      row.normal_stock,
+      row.available_stock,
+      row.seller_stock,
+      row.total_available_stock,
+    ], 0);
+    return total + Math.max(0, value);
+  }, 0);
+}
+
+function stockFromStockInfo(stockInfo) {
+  if (!stockInfo || typeof stockInfo !== "object") return 0;
+  const summary = stockInfo.summary_info || {};
+  return firstUsefulNumber([
+    stockInfo.stock,
+    stockInfo.current_stock,
+    stockInfo.normal_stock,
+    stockInfo.available_stock,
+    summary.total_available_stock,
+    summary.total_seller_stock,
+    sumStockRows(stockInfo.seller_stock),
+    sumStockRows(stockInfo.shopee_stock),
+    sumStockRows(stockInfo.stock_infos),
+  ], 0);
+}
+
+function reservedStockFromStockInfo(stockInfo) {
+  if (!stockInfo || typeof stockInfo !== "object") return 0;
+  const summary = stockInfo.summary_info || {};
+  return firstUsefulNumber([
+    stockInfo.reserved_stock,
+    stockInfo.reserved_stock_qty,
+    summary.total_reserved_stock,
+    summary.total_reserved,
+  ], 0);
+}
+
 function stockFromItem(item) {
-  const stockInfo = asArray(item.stock_info_v2 && item.stock_info_v2.seller_stock)[0] || {};
-  return firstNumber([item.stock, item.normal_stock, item.current_stock, stockInfo.stock, stockInfo.current_stock]);
+  return firstUsefulNumber([
+    item.stock,
+    item.normal_stock,
+    item.current_stock,
+    item.available_stock,
+    stockFromStockInfo(item.stock_info_v2),
+    stockFromStockInfo(item.stock_info),
+    sumStockRows(item.seller_stock),
+    sumStockRows(item.stock_infos),
+  ], 0);
+}
+
+function reservedStockFromItem(item) {
+  return firstUsefulNumber([
+    item.reserved_stock,
+    item.reserved_stock_qty,
+    reservedStockFromStockInfo(item.stock_info_v2),
+    reservedStockFromStockInfo(item.stock_info),
+  ], 0);
 }
 
 function priceFromItem(item) {
-  const priceInfo = asArray(item.price_info)[0] || {};
-  return firstNumber([priceInfo.current_price, priceInfo.original_price, priceInfo.price, item.price]);
+  const priceInfo = asArray(item.price_info);
+  const values = [];
+  priceInfo.forEach((price) => {
+    if (price && typeof price === "object") {
+      values.push(price.current_price, price.original_price, price.price);
+    }
+  });
+  values.push(item.price, item.current_price, item.original_price);
+  return firstUsefulNumber(values, 0);
+}
+
+function salesFromItem(item) {
+  const salesInfo = item.sales_info || {};
+  return firstUsefulNumber([
+    item.historical_sold,
+    item.sold,
+    item.sales_count,
+    item.global_sold,
+    salesInfo.historical_sold,
+    salesInfo.sold,
+    salesInfo.sales_count,
+  ], 0);
 }
 
 function normalizeProduct(item) {
@@ -369,7 +460,74 @@ function normalizeProduct(item) {
     title: cleanText(item.item_name || item.title || item.name || ""),
     price: priceFromItem(item),
     stock: stockFromItem(item),
-    sales_count: firstNumber([item.historical_sold, item.sold, item.sales_count]),
+    reserved_stock: reservedStockFromItem(item),
+    sales_count: salesFromItem(item),
+    model_count: 0,
+    stock_known: stockFromItem(item) > 0 || reservedStockFromItem(item) > 0,
+  };
+}
+
+function modelRowsFromPayload(payload) {
+  const response = payload && payload.response ? payload.response : {};
+  return []
+    .concat(asArray(response.model))
+    .concat(asArray(response.model_list))
+    .concat(asArray(response.models))
+    .concat(asArray(payload && payload.model))
+    .concat(asArray(payload && payload.model_list));
+}
+
+function summarizeModelRows(models) {
+  let stock = 0;
+  let reservedStock = 0;
+  let salesCount = 0;
+  const prices = [];
+
+  asArray(models).forEach((model) => {
+    if (!model || typeof model !== "object") return;
+    stock += Math.max(0, stockFromItem(model));
+    reservedStock += Math.max(0, reservedStockFromItem(model));
+    salesCount += Math.max(0, salesFromItem(model));
+    const price = priceFromItem(model);
+    if (price > 0) prices.push(price);
+  });
+
+  return {
+    stock,
+    reserved_stock: reservedStock,
+    sales_count: salesCount,
+    price: prices.length ? Math.min.apply(null, prices) : 0,
+    model_count: asArray(models).length,
+    stock_known: stock > 0 || reservedStock > 0,
+  };
+}
+
+async function fetchModelSummaries(binding, itemIds) {
+  const summaries = {};
+  for (let index = 0; index < itemIds.length; index += 1) {
+    const itemId = itemIds[index];
+    try {
+      const payload = await shopeeGet("/api/v2/product/get_model_list", {
+        item_id: Number(itemId),
+      }, binding);
+      summaries[String(itemId)] = summarizeModelRows(modelRowsFromPayload(payload));
+    } catch (error) {
+      summaries[String(itemId)] = null;
+    }
+  }
+  return summaries;
+}
+
+function mergeModelSummary(product, summary) {
+  if (!summary) return product;
+  return {
+    ...product,
+    price: firstUsefulNumber([product.price, summary.price], 0),
+    stock: summary.stock > 0 || summary.model_count > 0 ? summary.stock : product.stock,
+    reserved_stock: summary.reserved_stock > 0 ? summary.reserved_stock : product.reserved_stock,
+    sales_count: firstUsefulNumber([product.sales_count, summary.sales_count], 0),
+    model_count: summary.model_count || product.model_count || 0,
+    stock_known: Boolean(product.stock_known || summary.stock_known || summary.model_count > 0),
   };
 }
 
@@ -564,16 +722,20 @@ async function fetchProducts(binding, options) {
     productDetails.push(...nestedArray(payload, "item_list"));
   }
 
-  return productDetails
+  const products = productDetails
     .map(normalizeProduct)
     .filter((item) => item.product_id);
+  const modelSummaries = await fetchModelSummaries(binding, products.map((item) => item.product_id));
+  return products.map((product) => mergeModelSummary(product, modelSummaries[product.product_id]));
 }
 
 function inventoryFromProducts(products) {
   return products.map((product) => ({
     product_id: product.product_id,
     available_stock: product.stock,
-    reserved_stock: 0,
+    reserved_stock: product.reserved_stock || 0,
+    model_count: product.model_count || 0,
+    stock_known: Boolean(product.stock_known),
   }));
 }
 

@@ -144,6 +144,10 @@ function normalizeProduct(value: Partial<ShopeeProduct> & Record<string, unknown
     price: firstNumber([value.price, valueOf(value, "current_price"), valueOf(value, "original_price")], 0),
     stock: firstNumber([value.stock, valueOf(value, "available_stock"), valueOf(value, "normal_stock"), valueOf(value, "current_stock")], 0),
     sales_count: firstNumber([value.sales_count, valueOf(value, "sales"), valueOf(value, "historical_sold"), valueOf(value, "sold")], 0),
+    reserved_stock: firstNumber([value.reserved_stock, valueOf(value, "reserved"), valueOf(value, "reserved_stock_qty")], 0),
+    model_count: firstNumber([value.model_count, valueOf(value, "model_count")], 0),
+    stock_known: Boolean(value.stock_known ?? valueOf(value, "stock_known") ?? false),
+    shop_id: cleanText(value.shop_id ?? valueOf(value, "shopId")),
   };
 }
 
@@ -152,6 +156,9 @@ function normalizeInventory(value: Partial<ShopeeInventoryItem> & Record<string,
     product_id: String(value.product_id ?? ""),
     available_stock: firstNumber([value.available_stock, valueOf(value, "stock"), valueOf(value, "normal_stock"), valueOf(value, "current_stock")], 0),
     reserved_stock: firstNumber([value.reserved_stock, valueOf(value, "reserved"), valueOf(value, "reserved_stock_qty")], 0),
+    model_count: firstNumber([value.model_count, valueOf(value, "model_count")], 0),
+    stock_known: Boolean(value.stock_known ?? valueOf(value, "stock_known") ?? false),
+    shop_id: cleanText(value.shop_id ?? valueOf(value, "shopId")),
   };
 }
 

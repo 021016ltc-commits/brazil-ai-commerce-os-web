@@ -36,12 +36,19 @@ export type NormalizedShopeeProduct = {
   stock: number;
   sales: number;
   sales_count: number;
+  reserved_stock?: number;
+  model_count?: number;
+  stock_known?: boolean;
+  shop_id?: string;
 };
 
 export type NormalizedShopeeInventoryItem = {
   product_id: string;
   available_stock: number;
   reserved_stock: number;
+  model_count?: number;
+  stock_known?: boolean;
+  shop_id?: string;
 };
 
 const tokenState: ShopeeTokenState = {
@@ -157,6 +164,10 @@ export function normalizeProductData(value: Partial<ShopeeProduct> | Record<stri
     stock: asNumber(record.stock ?? record.available_stock),
     sales,
     sales_count: sales,
+    reserved_stock: asNumber(record.reserved_stock ?? record.reservedStock ?? record.reserved),
+    model_count: asNumber(record.model_count ?? record.modelCount),
+    stock_known: Boolean(record.stock_known ?? record.stockKnown ?? false),
+    shop_id: asString(record.shop_id ?? record.shopId),
   };
 }
 
@@ -169,6 +180,9 @@ export function normalizeInventoryData(
     product_id: asString(record.product_id ?? record.productId ?? record.item_id ?? record.itemId),
     available_stock: asNumber(record.available_stock ?? record.availableStock ?? record.stock),
     reserved_stock: asNumber(record.reserved_stock ?? record.reservedStock ?? record.reserved),
+    model_count: asNumber(record.model_count ?? record.modelCount),
+    stock_known: Boolean(record.stock_known ?? record.stockKnown ?? false),
+    shop_id: asString(record.shop_id ?? record.shopId),
   };
 }
 
