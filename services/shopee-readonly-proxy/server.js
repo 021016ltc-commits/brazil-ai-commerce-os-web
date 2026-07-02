@@ -18,7 +18,7 @@ const ORDER_HISTORY_DAYS = Math.max(
   Math.min(730, Number(process.env.SHOPEE_ORDER_HISTORY_DAYS || process.env.SHOPEE_FULL_ORDER_SYNC_DAYS || 180)),
 );
 const MAX_SYNC_ITEMS = Math.max(50, Math.min(50000, Number(process.env.SHOPEE_FULL_SYNC_MAX_ITEMS || process.env.SHOPEE_MAX_SYNC_ITEMS || 10000)));
-const PAGE_SIZE = Math.max(10, Math.min(100, Number(process.env.SHOPEE_PAGE_SIZE || 50)));
+const PAGE_SIZE = Math.max(10, Math.min(100, Number(process.env.SHOPEE_PAGE_SIZE || 100)));
 const SNAPSHOT_MAX_AGE_MS = Math.max(60 * 1000, Number(process.env.SHOPEE_SNAPSHOT_MAX_AGE_MS || 5 * 60 * 1000));
 const SNAPSHOT_FILES = {
   orders: path.join(DATA_DIR, "orders-snapshot.json"),
@@ -26,7 +26,11 @@ const SNAPSHOT_FILES = {
   inventory: path.join(DATA_DIR, "inventory-snapshot.json"),
 };
 const SYNC_STATE_FILE = path.join(DATA_DIR, "sync-state.json");
-const SERVICE_VERSION = "2026-07-02.order-timefield-sync-v2";
+const ORDER_STATUS_FILTERS = String(
+  process.env.SHOPEE_ORDER_STATUS_FILTERS
+    || "READY_TO_SHIP,PROCESSED,SHIPPED,COMPLETED,CANCELLED,IN_CANCEL,UNPAID,TO_RETURN,INVOICE_PENDING",
+).split(",").map((item) => item.trim()).filter(Boolean);
+const SERVICE_VERSION = "2026-07-02.order-status-full-sync-v3";
 let syncJob = null;
 
 function nowIso() {
@@ -446,16 +450,19 @@ async function fetchOrderSnsForWindow(binding, timeFrom, timeTo, orderSns, optio
   const maxItems = numberOption(config.maxItems, MAX_SYNC_ITEMS, 1, MAX_SYNC_ITEMS);
   const pageSize = numberOption(config.pageSize, PAGE_SIZE, 1, PAGE_SIZE);
   const timeRangeField = config.timeRangeField || "update_time";
+  const orderStatus = config.orderStatus || "";
   let cursor = "";
   while (orderSns.length < maxItems) {
     const remaining = Math.max(1, maxItems - orderSns.length);
-    const payload = await shopeeGet("/api/v2/order/get_order_list", {
+    const query = {
       time_range_field: timeRangeField,
       time_from: timeFrom,
       time_to: timeTo,
       page_size: Math.min(pageSize, remaining),
       cursor,
-    }, binding);
+    };
+    if (orderStatus) query.order_status = orderStatus;
+    const payload = await shopeeGet("/api/v2/order/get_order_list", query, binding);
     const list = nestedArray(payload, "order_list");
     orderSns.push(...list.map((item) => String(item.order_sn || item.order_id || "")).filter(Boolean));
     const response = payload.response || {};
@@ -475,19 +482,28 @@ async function fetchOrders(binding, options) {
   const historyFrom = now - historyDays * 24 * 60 * 60;
   const orderSns = [];
   const timeRangeFields = ["update_time", "create_time"];
+  const statusFilters = [""].concat(ORDER_STATUS_FILTERS);
 
   for (let fieldIndex = 0; fieldIndex < timeRangeFields.length && orderSns.length < maxItems; fieldIndex += 1) {
     const timeRangeField = timeRangeFields[fieldIndex];
-    let windowTo = now;
+    for (let statusIndex = 0; statusIndex < statusFilters.length && orderSns.length < maxItems; statusIndex += 1) {
+      const orderStatus = statusFilters[statusIndex];
+      let windowTo = now;
 
-    while (windowTo > historyFrom && orderSns.length < maxItems) {
-      const windowFrom = Math.max(historyFrom, windowTo - windowDays * 24 * 60 * 60 + 1);
-      await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns, {
-        maxItems,
-        pageSize: config.pageSize,
-        timeRangeField,
-      });
-      windowTo = windowFrom - 1;
+      while (windowTo > historyFrom && orderSns.length < maxItems) {
+        const windowFrom = Math.max(historyFrom, windowTo - windowDays * 24 * 60 * 60 + 1);
+        try {
+          await fetchOrderSnsForWindow(binding, windowFrom, windowTo, orderSns, {
+            maxItems,
+            pageSize: config.pageSize,
+            timeRangeField,
+            orderStatus,
+          });
+        } catch (error) {
+          if (!orderStatus) throw error;
+        }
+        windowTo = windowFrom - 1;
+      }
     }
   }
 
