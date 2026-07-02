@@ -402,10 +402,17 @@ async function fetchRemoteOrdersQuick(): Promise<ShopeeOrder[]> {
 
 async function fetchRemoteOrdersForSync(): Promise<ShopeeOrder[]> {
   try {
+    const orders = await fetchRemoteOrdersQuick();
+    if (orders.length > 0) return orders;
+  } catch {
+    // The proxy may still be building the order snapshot. Try the cached endpoint next.
+  }
+
+  try {
     const orders = await fetchRemoteOrders();
     if (orders.length > 0) return orders;
   } catch {
-    // The proxy may still be building the order snapshot. Do not block web requests.
+    // Do not block web requests when Shopee has no recent orders or rate limits the call.
   }
 
   return [];
@@ -545,7 +552,14 @@ async function startRemoteShopeeSync(): Promise<{
 async function fetchRemoteShopeeDataPartial(): Promise<RemoteShopeePayload> {
   try {
     const bundle = await fetchRemoteShopeeBundle();
-    if (bundle.orders.length > 0 || bundle.products.length > 0 || bundle.inventory.length > 0) return bundle;
+    if (bundle.orders.length > 0 || bundle.products.length > 0 || bundle.inventory.length > 0) {
+      const [orders, products, inventory] = await Promise.all([
+        bundle.orders.length > 0 ? Promise.resolve(bundle.orders) : fetchRemoteOrdersForSync().catch(() => []),
+        bundle.products.length > 0 ? Promise.resolve(bundle.products) : fetchRemoteProductsFull().catch(() => []),
+        bundle.inventory.length > 0 ? Promise.resolve(bundle.inventory) : fetchRemoteInventoryFull().catch(() => []),
+      ]);
+      return { orders, products, inventory };
+    }
   } catch {
     // Fall through to individual endpoints for compatibility with older proxies.
   }
